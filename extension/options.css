@@ -1,1 +1,26 @@
-html{color-scheme:light dark;font:16px/1.55 system-ui,sans-serif}body{margin:0;padding:24px}main{max-width:760px;margin:auto}h1{line-height:1.2}label{display:block;font-weight:600;margin:18px 0 6px}textarea{box-sizing:border-box;width:100%;font:inherit;padding:10px;border:1px solid #888;border-radius:8px}button{font:inherit;padding:10px 16px;border-radius:8px;border:1px solid #888;margin:8px 8px 0 0;cursor:pointer}button:focus-visible,textarea:focus-visible{outline:3px solid #3ea6ff;outline-offset:3px}#status{min-height:1.6em}
+html{color-scheme:light dark;font:15px/1.65 system-ui,-apple-system,sans-serif;--page:#f5f6f8;--surface:#fff;--text:#1b1d23;--muted:#5e6470;--line:#d9dde5;--field:#fafbfc;--accent:#b3261e;--accent-hover:#901f18;--focus:#1670d2}
+*{box-sizing:border-box}
+body{margin:0;padding:48px 24px;background:var(--page);color:var(--text)}
+main{max-width:800px;margin:auto;padding:40px;background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:0 12px 48px #1820330a}
+h1{font-size:32px;line-height:1.2;letter-spacing:-1px;margin:0 0 18px}
+h1::before{content:"EXTENSION SETTINGS";display:block;font-size:11px;font-weight:700;letter-spacing:1.8px;color:var(--accent);margin-bottom:12px}
+h2{font-size:19px;letter-spacing:-.3px;margin-top:30px;padding-top:24px;border-top:1px solid var(--line)}
+p{color:var(--muted);margin:12px 0 18px}
+strong{color:var(--text)}
+form{margin-top:28px;padding:24px;background:var(--field);border:1px solid var(--line);border-radius:18px}
+label{display:block;font-weight:600;margin:20px 0 8px;line-height:1.5}
+form>label:first-child{margin-top:0}
+textarea{display:block;width:100%;min-height:110px;resize:vertical;font:14px/1.65 ui-monospace,monospace;padding:12px 14px;background:var(--surface);color:var(--text);border:1px solid var(--line);border-radius:12px;transition:border-color .16s ease,box-shadow .16s ease}
+textarea:hover{border-color:var(--muted)}
+input[type=checkbox]{width:18px;height:18px;margin:0 8px 0 0;vertical-align:-3px;accent-color:var(--accent)}
+button{min-height:44px;max-width:100%;font:inherit;font-weight:600;line-height:1.4;padding:11px 18px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--text);margin:8px 8px 0 0;cursor:pointer;transition:background .16s ease,border-color .16s ease}
+button:hover:not(:disabled){background:var(--page);border-color:var(--muted)}
+button[type=submit]{background:var(--accent);color:#fff;border-color:transparent}
+button[type=submit]:hover:not(:disabled){background:var(--accent-hover);border-color:transparent}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+#status{min-height:1.6em;margin-bottom:0;font-weight:600;color:var(--text);overflow-wrap:anywhere}
+@media(prefers-color-scheme:dark){html{--page:#111318;--surface:#1b1e25;--text:#f1f3f7;--muted:#b1b8c6;--line:#3a404c;--field:#161920;--focus:#70b7ff}h1::before{color:#ffaaa4}main{box-shadow:0 12px 48px #0003}}
+@media(max-width:600px){body{padding:20px 12px}main{padding:24px 18px;border-radius:20px}h1{font-size:26px}form{padding:18px 14px}button{width:100%;margin-right:0}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+@media(forced-colors:active){button,button[type=submit]{background:ButtonFace;color:ButtonText;border-color:ButtonText}button:disabled{color:GrayText;opacity:1}main,form,textarea{border-color:CanvasText}h1::before{color:CanvasText}}

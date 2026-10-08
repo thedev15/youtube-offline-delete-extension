@@ -60,21 +60,32 @@
   }
   const host = document.createElement("div");
   host.id = "yt-offline-remove-host";
-  host.style.cssText = "display:inline-flex;align-items:center;margin-inline:8px;max-width:100%;";
+  host.style.cssText = "display:inline-flex;align-items:center;flex-wrap:wrap;gap:8px;margin:6px 8px;max-width:100%;min-width:0;";
   const shadow = host.attachShadow({mode: "open"});
   shadow.innerHTML = `<style>
-    :host{font:14px/1.4 system-ui,sans-serif;color:var(--yt-spec-text-primary,#111)}
-    button{font:inherit;cursor:pointer;border:1px solid #8886;border-radius:22px;padding:9px 14px;background:var(--yt-spec-badge-chip-background,#8882);color:inherit;white-space:nowrap}
-    button:hover{background:#8883}button:focus-visible{outline:3px solid #3ea6ff;outline-offset:3px}
-    button:disabled{opacity:.55;cursor:default}.danger{background:#b3261e;color:#fff}.danger:hover{background:#901f18}
-    .status{max-width:260px;font-size:12px;margin-inline-start:8px;overflow-wrap:anywhere}
-    #details{font-size:12px;padding:6px 10px;margin-inline-start:6px}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:40vh;overflow:auto;font:12px/1.4 monospace}
-    .backdrop{position:fixed;inset:0;background:#0009;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
-    .dialog{background:var(--yt-spec-base-background,#fff);color:var(--yt-spec-text-primary,#111);border:1px solid #8886;border-radius:16px;padding:24px;max-width:420px;box-shadow:0 8px 40px #0007}
-    h2{font-size:20px;margin:0 0 12px}p{white-space:normal;margin:10px 0 18px}.buttons{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
-    @media(max-width:700px){.status{max-width:160px}.dialog{padding:18px}}
-    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
-    @media(forced-colors:active){button{border:1px solid ButtonText}.danger{background:ButtonFace;color:ButtonText}}
+    :host{font:14px/1.5 system-ui,-apple-system,sans-serif;color:var(--yt-spec-text-primary,#161616);--accent:#b3261e;--accent-hover:#901f18;--surface:var(--yt-spec-base-background,#fff);--muted:var(--yt-spec-text-secondary,#606060);--line:var(--yt-spec-10-percent-layer,#8884)}
+    *,*::before,*::after{box-sizing:border-box}
+    button{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;max-width:100%;font:inherit;font-weight:600;cursor:pointer;border:1px solid var(--line);border-radius:999px;padding:9px 16px;background:var(--yt-spec-badge-chip-background,#8881);color:inherit;white-space:normal;text-align:center;transition:background .16s ease,border-color .16s ease,box-shadow .16s ease}
+    button:hover:not(:disabled){background:var(--yt-spec-button-chip-background-hover,#8883);border-color:#8888}
+    button:active:not(:disabled){box-shadow:inset 0 1px 4px #0002}
+    button:focus-visible{outline:3px solid #3ea6ff;outline-offset:3px}
+    button:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+    #remove,.danger{background:var(--accent);border-color:transparent;color:#fff}
+    #remove:hover:not(:disabled),.danger:hover:not(:disabled){background:var(--accent-hover);border-color:transparent}
+    #remove::before,.danger::before{content:"";flex:0 0 16px;width:16px;height:16px;background:currentColor;clip-path:polygon(28% 0,72% 0,72% 12%,94% 12%,94% 24%,6% 24%,6% 12%,28% 12%,28% 0,18% 32%,82% 32%,76% 100%,24% 100%,18% 32%)}
+    #native-check{font-size:13px}#details{font-size:13px;background:transparent;color:var(--muted);padding-inline:12px}
+    .status{flex:1 1 180px;max-width:300px;min-width:0;font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+    .status:empty{display:none}
+    pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:40vh;overflow:auto;font:12px/1.6 ui-monospace,monospace;padding:14px;background:var(--yt-spec-badge-chip-background,#8881);border:1px solid var(--line);border-radius:12px}
+    .backdrop{position:fixed;inset:0;background:#0009;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+    .dialog{background:var(--surface);color:var(--yt-spec-text-primary,#161616);border:1px solid var(--line);border-radius:24px;padding:28px;width:100%;max-width:460px;max-height:calc(100dvh - 40px);overflow:auto;box-shadow:0 24px 80px #0005}
+    h2{font-size:22px;line-height:1.3;letter-spacing:-.4px;margin:0 0 12px}
+    p{white-space:normal;margin:10px 0 22px;color:var(--muted)}
+    .buttons{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;padding-top:6px}
+    @media(max-width:700px){button{padding:9px 12px}.status{flex-basis:100%;max-width:100%}.dialog{padding:22px;border-radius:20px}}
+    @media(max-width:380px){.backdrop{padding:12px}.dialog{max-height:calc(100dvh - 24px)}.buttons button{flex:1 1 100%}}
+    @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto;transition:none!important}}
+    @media(forced-colors:active){button{border:1px solid ButtonText}#remove,.danger{background:ButtonFace;color:ButtonText;border-color:ButtonText}button:disabled{color:GrayText;opacity:1}.status,#details,p{color:CanvasText}}
   </style><button id="remove" type="button" aria-describedby="status">Remove download</button><button id="native-check" type="button">Check native control</button><button id="details" type="button" aria-label="Show privacy-safe removal diagnostics">Details</button><span id="status" class="status" role="status" aria-live="polite"></span>`;
   const button = shadow.getElementById("remove");
   const status = shadow.getElementById("status");
