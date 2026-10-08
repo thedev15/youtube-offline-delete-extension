@@ -1,0 +1,13 @@
+dist/
+test-results/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+first-checksums

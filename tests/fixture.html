@@ -1,0 +1,61 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Offline Downloads fixture — NOT real YouTube</title>
+<style>body{margin:0;background:#0f0f0f;color:#eee;font:16px system-ui;padding:24px}ytd-watch-flexy{display:grid;grid-template-columns:minmax(300px,1fr) 360px;gap:20px}#player{height:320px;background:#292929;border-radius:14px;display:flex;align-items:center;justify-content:center}#above-the-fold{display:block}#top-row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}#actions{display:flex;align-items:center;flex-wrap:wrap;--yt-spec-base-background:#171717;--yt-spec-text-primary:#eee}ytd-playlist-panel-renderer{display:block;border:1px solid #555;border-radius:12px;padding:12px}ytd-playlist-panel-video-renderer{display:flex;gap:8px;margin:12px 0;align-items:center}a{color:#eee}ytd-menu-renderer{margin-left:auto}button{cursor:pointer;padding:8px}ytd-menu-popup-renderer{position:fixed;right:24px;top:150px;padding:15px;background:#292929;border:1px solid #666;display:block;z-index:2000}ytd-menu-service-item-renderer{display:block;cursor:pointer;padding:12px}ytd-menu-service-item-renderer:hover{background:#555}@media(max-width:700px){ytd-watch-flexy{grid-template-columns:1fr}#player{height:180px}}</style></head>
+<body><h1>Offline Downloads fixture — simulated native controls</h1>
+<ytd-watch-flexy><div><div id="player">Fixture video player</div><div id="above-the-fold"><ytd-watch-metadata><div id="top-row"><div><h2>Current downloaded video</h2><p>Fixture channel</p></div><div id="actions"><button type="button">Share</button></div></div></ytd-watch-metadata></div></div>
+<ytd-playlist-panel-renderer><div id="header"><h2 id="title">Downloads</h2></div>
+<ytd-playlist-panel-video-renderer data-video-id="aaaaaaaaaaa"><a href="/watch?v=aaaaaaaaaaa">Current video</a><ytd-menu-renderer><button aria-haspopup="true" aria-label="Video options">⋮</button></ytd-menu-renderer></ytd-playlist-panel-video-renderer>
+<ytd-playlist-panel-video-renderer data-video-id="bbbbbbbbbbb"><a href="/watch?v=bbbbbbbbbbb">Other video</a><ytd-menu-renderer><button aria-haspopup="true" aria-label="Video options">⋮</button></ytd-menu-renderer></ytd-playlist-panel-video-renderer>
+</ytd-playlist-panel-renderer></ytd-watch-flexy><div id="popups"></div>
+<script>
+window.fixture={opened:0,removed:0,wrong:0,navigated:0,removeWorks:true,autoAdvance:false,menuTag:"ytd-menu-service-item-renderer",label:"Remove from downloads"};
+fixture.downloaded={aaaaaaaaaaa:true,bbbbbbbbbbb:true};fixture.nativeRequests=0;fixture.nativeAdds=0;fixture.nativeOther=0;fixture.nativeWorks=true;fixture.nativeOptimisticOnly=false;fixture.nativeUiAbsent={};fixture.nativeRenderMode="normal";
+customElements.define("ytd-menu-service-item-download-renderer",class extends HTMLElement {
+  connectedCallback(){this.refresh();}
+  set data(value){this._data=value;this.refresh();}
+  get data(){return this._data;}
+  refresh(){
+    const id=this._data?.serviceEndpoint?.offlineVideoEndpoint?.videoId;
+    if(!id)return;
+    this.replaceChildren();
+    if(fixture.nativeRenderMode==="empty")return;
+    const item=document.createElement(fixture.nativeRenderMode==="no-click-target"?"div":"tp-yt-paper-item");item.style.display="block";
+    const label=document.createElement("yt-formatted-string");label.textContent=fixture.downloaded[id]&&!fixture.nativeUiAbsent[id]?"Remove from downloads":"Download";
+    item.append(label);this.append(item);
+    if(["two-targets","ambiguous-targets","hidden-duplicate","disabled-duplicate"].includes(fixture.nativeRenderMode)){
+      const secondary=document.createElement("button");
+      const secondaryLabel=document.createElement("yt-formatted-string");
+      secondaryLabel.textContent=fixture.nativeRenderMode==="two-targets"?"":label.textContent;
+      secondary.append(secondaryLabel);secondary.addEventListener("click",()=>fixture.nativeOther++);
+      if(fixture.nativeRenderMode==="hidden-duplicate")secondary.hidden=true;
+      if(fixture.nativeRenderMode==="disabled-duplicate")secondary.disabled=true;
+      this.prepend(secondary);
+    }
+    if(fixture.nativeRenderMode==="disabled-target")item.setAttribute("aria-disabled","true");
+    if(fixture.nativeRenderMode==="hidden-target")item.style.display="none";
+    if(fixture.nativeRenderMode==="hidden-wrapper"){
+      const wrapper=document.createElement("div");wrapper.setAttribute("aria-hidden","true");this.append(wrapper);wrapper.append(item);
+    }
+    if(fixture.nativeRenderMode==="nested-target"){
+      const nested=document.createElement("button");nested.append(label);item.append(nested);
+    }
+    if(fixture.nativeRenderMode==="stray-label")this.append(label);
+    item.addEventListener("click",()=>{
+      if(fixture.downloaded[id]){fixture.nativeRequests++;if(fixture.nativeWorks){if(fixture.nativeOptimisticOnly)fixture.nativeUiAbsent[id]=true;else fixture.downloaded[id]=false;document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh());}}
+      else fixture.nativeAdds++;
+    });
+  }
+});
+document.addEventListener("click",event=>{
+  const link=event.target.closest("ytd-playlist-panel-video-renderer a[href]");
+  if(link){event.preventDefault();window.fixture.navigated++;history.pushState({},"",link.href);document.dispatchEvent(new Event("yt-navigate-finish"));return;}
+  const menuButton=event.target.closest("ytd-menu-renderer button");
+  if(!menuButton)return;
+  window.fixture.opened++;
+  const row=menuButton.closest("ytd-playlist-panel-video-renderer");
+  const menu=document.createElement("ytd-menu-popup-renderer");
+  const generic=document.createElement("ytd-menu-service-item-renderer");generic.textContent="Delete";generic.addEventListener("click",()=>window.fixture.wrong++);
+  const remove=document.createElement(window.fixture.menuTag);remove.textContent=window.fixture.label;remove.style.display="block";
+  remove.addEventListener("click",()=>{window.fixture.removed++;if(window.fixture.removeWorks){const next=row.nextElementSibling?.querySelector("a[href]");row.remove();menu.remove();if(window.fixture.autoAdvance&&next){history.pushState({},"",next.href);document.dispatchEvent(new Event("yt-navigate-finish"));}}});
+  menu.append(generic,remove);document.getElementById("popups").append(menu);
+});
+</script></body></html>
