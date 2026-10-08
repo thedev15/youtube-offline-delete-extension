@@ -154,7 +154,7 @@
       nativeControlStructure: safeStructure(nativeState.structure),
       nativeBridge: {
         ...bridgeState,
-        adapterVersion: document.documentElement.getAttribute("data-yto-native-version") === "0.1.6" ? "0.1.6" : "missing-or-other-version",
+        adapterVersion: document.documentElement.getAttribute("data-yto-native-version") === "0.1.7" ? "0.1.7" : "missing-or-other-version",
         adapterStage: ["ready", "request-received", "request-rejected", "probe-running", "remove-running", "response-sent", "reply-failed"].find(value => value === document.documentElement.getAttribute("data-yto-native-stage")) || "missing-or-unknown"
       }};
   }
@@ -237,8 +237,8 @@
       <div class="buttons"><button id="cancel" type="button">Cancel</button><button id="confirm" class="danger" type="button">Remove download</button></div>
     </section>`;
     shadow.append(overlay);
-    if (found.native) overlay.querySelector("#confirm-help").textContent = "Experimental: ask YouTube's native download control to remove this local copy, without opening Downloads or another tab. No direct database deletion is used. Native UI state—not stored media bytes—is used to check the result.";
-    if (settings.advanceAfterRemoval) overlay.querySelector("#confirm-help").append(" Play next only after removal and the next video's native downloaded state are verified.");
+    if (found.native) overlay.querySelector("#confirm-help").textContent = "Experimental: this standalone control has failed to establish persistent deletion in live testing. A changed label does not prove the saved copy was removed. This attempt will not automatically advance playback. No direct database deletion is used.";
+    if (settings.advanceAfterRemoval && !found.native) overlay.querySelector("#confirm-help").append(" Play next only after removal is verified.");
     modal = {element: overlay, id: found.id};
     const cancel = overlay.querySelector("#cancel");
     const confirm = overlay.querySelector("#confirm");
@@ -289,18 +289,14 @@
     if (busy) return;
     busy = true;
     notice = "";
-    const next = settings.advanceAfterRemoval ? nextVideo(found) : null;
     update();
     try {
-      const result = await nativeRequest("remove", found.id, next?.id);
+      const result = await nativeRequest("remove", found.id);
       if (videoId(location.href) !== found.id) throw new Error("Player changed; no next-video navigation attempted.");
-      nativeState = {status: "unchecked", reason: "Check the native control again before another removal."};
+      nativeState = {status: result.status, reason: result.reason};
       notice = result.reason;
-      if (result.status === "removed" && next && result.nextDownloaded === true) {
-        const live = [...document.querySelectorAll(ROW_SELECTOR)].map(row => rowLink(row, next.id)).filter(Boolean);
-        if (live.length === 1 && videoId(live[0].href) === next.id) live[0].click();
-        else notice += " Next link changed; playback was not advanced.";
-      } else if (result.status === "removed" && next) notice += " Next video's downloaded state was not verified; playback was not advanced.";
+      // Standalone UI evidence is not durable-removal evidence. Never advance
+      // from this path until an independent persistence check is implemented.
     } catch (error) {notice = error.message; nativeState = {status: "unchecked", reason: "Check native control again."};}
     finally {busy = false; update();}
   }

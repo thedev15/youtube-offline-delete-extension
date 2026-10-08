@@ -85,13 +85,14 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
             prepare_native(page)
             assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
             click_confirm(page)
-            expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
-            assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===1')
+            expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('persistent deletion has not been verified')
+            expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+            assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
             assert len(context.pages)==count and len(page.frames)==1
             assert page.evaluate('fixture.downloaded.aaaaaaaaaaa===false && fixture.downloaded.bbbbbbbbbbb===true')
         finally:
             context.set_offline(False)
-    case('native adapter removes once and advances offline fixture without sidebar menu, frame or new tab',native_positive)
+    case('standalone native attempt never promotes UI transition to durable success or advances',native_positive)
     def native_message_interference(page):
         page.evaluate('() => {window.addEventListener("message",event=>event.stopImmediatePropagation(),true);window.postMessage=()=>{throw new Error("Fixture blocked postMessage")};}')
         native_positive(page)
@@ -101,7 +102,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('#yt-offline-remove-host #details').click()
         text=page.locator('#yt-offline-remove-host pre').inner_text()
         report=json.loads(text)
-        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.6','adapterStage':'response-sent'}
+        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.7','adapterStage':'response-sent'}
         structure=report['nativeControlStructure']
         assert structure['bindingMatches'] and structure['removalLabelSeen'] and structure['eligibleNativeClickTarget']
         assert structure['formattedLabelCount']==1 and structure['nativeClickTargetCount']==1
@@ -148,8 +149,9 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('#yt-offline-remove-host #close-details').click()
         assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeOther===0')
         click_confirm(page)
-        expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
-        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.nativeOther===0 && fixture.navigated===1')
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('persistent deletion has not been verified')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.nativeOther===0 && fixture.navigated===0')
     for mode,matching in [('two-targets',1),('hidden-duplicate',2),('disabled-duplicate',2)]:
         case('select unique eligible removal-label owner: '+mode,lambda page,m=mode,c=matching:multi_target_positive(page,m,c))
     def rejected_target(page,mode,eligible):
@@ -218,11 +220,25 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
         assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
     case('unverified native removal is not retried and never advances',native_unverified)
+    def optimistic_ui_survives(page):
+        page.evaluate('fixture.nativeOptimisticOnly=true')
+        prepare_native(page)
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('persistent deletion has not been verified')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.downloaded.aaaaaaaaaaa===true && fixture.nativeUiAbsent.aaaaaaaaaaa===true && fixture.nativeRequests===1 && fixture.navigated===0')
+        page.locator('#yt-offline-remove-host #details').click()
+        report=json.loads(page.locator('#yt-offline-remove-host pre').inner_text())
+        assert report['nativeControlStatus']=='unverified'
+        page.locator('#yt-offline-remove-host #close-details').click()
+        page.evaluate('() => {fixture.nativeUiAbsent={}; document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh());}')
+        assert page.evaluate('fixture.downloaded.aaaaaaaaaaa===true && fixture.nativeRequests===1 && fixture.navigated===0')
+    case('optimistic labels in all controls do not prove durable removal when saved copy survives',optimistic_ui_survives)
     def native_next_missing(page):
         page.evaluate('fixture.downloaded.bbbbbbbbbbb=false')
         prepare_native(page)
         click_confirm(page)
-        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text("Next video's downloaded state was not verified")
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('persistent deletion has not been verified')
         expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
         assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
     case('native adapter never advances to a non-downloaded next video',native_next_missing)
@@ -244,7 +260,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('[data-video-id="bbbbbbbbbbb"]').evaluate('(node)=>node.remove()')
         prepare_native(page)
         click_confirm(page)
-        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('Native UI indicates removal')
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('persistent deletion has not been verified')
         expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
         assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
     case('native last download stays on the same page',native_last)

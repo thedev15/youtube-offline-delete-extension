@@ -1,5 +1,13 @@
 # Validation and release gates
 
+**Live v0.1.6 persistence failure:** the saved copy remained playable offline
+after being reopened. No native durable-removal or production-ready claim applies.
+v0.1.7 is a safety correction, not a persistent-deletion implementation.
+An optimistic-UI fixture now changes labels in all newly constructed controls
+while keeping the simulated saved copy. This must remain unverified, retained
+in Details, with zero retries and navigation. Even fixtures where the simulated
+copy disappears do not let the standalone route infer persistence from labels.
+
 ## Automated
 
 - Node built-in tests: URL/origin constraints, label normalization and bounds,
@@ -63,7 +71,7 @@ Using a disposable download you explicitly consent to removing:
 10. Safari: use macOS conversion/build, enable permissions, and test the actual addon.
 11. Check the browser's native YouTube download availability; unsupported browsers
     cannot gain native offline support from this extension.
-12. Edge: verify version 0.1.6 after reloading the unpacked extension and refreshing
+12. Edge: verify version 0.1.7 after reloading the unpacked extension and refreshing
     YouTube. A disabled button must explain the condition and offer Details; its
     report must not contain account information, video IDs/titles or URLs.
 13. In the live offline player without a sidebar menu, run **Check native control**

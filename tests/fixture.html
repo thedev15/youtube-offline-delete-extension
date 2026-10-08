@@ -8,7 +8,7 @@
 </ytd-playlist-panel-renderer></ytd-watch-flexy><div id="popups"></div>
 <script>
 window.fixture={opened:0,removed:0,wrong:0,navigated:0,removeWorks:true,autoAdvance:false,menuTag:"ytd-menu-service-item-renderer",label:"Remove from downloads"};
-fixture.downloaded={aaaaaaaaaaa:true,bbbbbbbbbbb:true};fixture.nativeRequests=0;fixture.nativeAdds=0;fixture.nativeOther=0;fixture.nativeWorks=true;fixture.nativeRenderMode="normal";
+fixture.downloaded={aaaaaaaaaaa:true,bbbbbbbbbbb:true};fixture.nativeRequests=0;fixture.nativeAdds=0;fixture.nativeOther=0;fixture.nativeWorks=true;fixture.nativeOptimisticOnly=false;fixture.nativeUiAbsent={};fixture.nativeRenderMode="normal";
 customElements.define("ytd-menu-service-item-download-renderer",class extends HTMLElement {
   connectedCallback(){this.refresh();}
   set data(value){this._data=value;this.refresh();}
@@ -19,7 +19,7 @@ customElements.define("ytd-menu-service-item-download-renderer",class extends HT
     this.replaceChildren();
     if(fixture.nativeRenderMode==="empty")return;
     const item=document.createElement(fixture.nativeRenderMode==="no-click-target"?"div":"tp-yt-paper-item");item.style.display="block";
-    const label=document.createElement("yt-formatted-string");label.textContent=fixture.downloaded[id]?"Remove from downloads":"Download";
+    const label=document.createElement("yt-formatted-string");label.textContent=fixture.downloaded[id]&&!fixture.nativeUiAbsent[id]?"Remove from downloads":"Download";
     item.append(label);this.append(item);
     if(["two-targets","ambiguous-targets","hidden-duplicate","disabled-duplicate"].includes(fixture.nativeRenderMode)){
       const secondary=document.createElement("button");
@@ -40,7 +40,7 @@ customElements.define("ytd-menu-service-item-download-renderer",class extends HT
     }
     if(fixture.nativeRenderMode==="stray-label")this.append(label);
     item.addEventListener("click",()=>{
-      if(fixture.downloaded[id]){fixture.nativeRequests++;if(fixture.nativeWorks){fixture.downloaded[id]=false;document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh());}}
+      if(fixture.downloaded[id]){fixture.nativeRequests++;if(fixture.nativeWorks){if(fixture.nativeOptimisticOnly)fixture.nativeUiAbsent[id]=true;else fixture.downloaded[id]=false;document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh());}}
       else fixture.nativeAdds++;
     });
   }

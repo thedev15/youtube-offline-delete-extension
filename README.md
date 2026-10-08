@@ -1,5 +1,28 @@
 # YouTube Offline Remove
 
+## Known live persistence failure — v0.1.7 safety correction
+
+The live v0.1.6 standalone-control attempt did **not** establish durable removal:
+the video returned and played in a newly loaded player with the network off.
+The earlier apparent deletion and two-renderer UI transition were not sufficient
+evidence. v0.1.7 fixes that false-success classification, not the underlying
+persistence failure. Standalone attempts return **unverified** even if both
+controls offer Download, retain that result in Details and never auto-advance.
+The confirmation explicitly warns about the persistence failure. Do not retry
+this experimental route to establish deletion. No production-ready claim applies.
+
+The next prerequisite for a durable in-player implementation is inspecting the
+real Downloads-menu handler, rather than invoking guessed proxy arguments or
+changing browser storage directly. `tools/inspect-real-native-handler.js` is a
+read-only DevTools helper: open the real Downloads menu without clicking removal,
+select its removal item in Elements, then run the helper in Console. It identifies
+available controller/element handlers and opens the primary handler's source
+without calling it. Share static implementation code only—no runtime IDs,
+cookies, tokens, URLs or account values. Wrapper-only source is insufficient.
+
+The historical prototype description below documents the earlier approach;
+its native UI-only success/advance behavior is superseded by this warning.
+
 A small, dependency-free WebExtension that adds **Remove download** beside the
 video actions below a YouTube watch-page player—the area marked in the requested
 design. It delegates to **YouTube's own native download control** (experimental)
@@ -9,7 +32,7 @@ or directly delete browser storage.
 **Offline playback limitation:** the live Edge watch-page Downloads sidebar has
 been reported not to expose a native removal control. The current native-menu
 adapter therefore does **not** provide verified offline in-player deletion.
-Version **0.1.6** includes an experimental
+Version **0.1.7** includes an experimental
 **Check native control** adapter. It creates YouTube's
 `ytd-menu-service-item-download-renderer` in the player page, supplying only the
 observed `serviceEndpoint.offlineVideoEndpoint.videoId` payload. The check does
@@ -21,7 +44,7 @@ the native DOM click handler—never guessed `sendOfflineAction` arguments.
 this component, or construction/data assignment might not initialize it outside
 the real menu. Those cases must stop without removal. Fixture success does not
 prove YouTube's lifecycle, local-copy deletion or actual next-video playback.
-No helper tab, iframe or Downloads-page navigation is used by v0.1.6.
+No helper tab, iframe or Downloads-page navigation is used by v0.1.7.
 
 ### Bridge timeout investigation
 
@@ -88,7 +111,7 @@ that removal cannot be verified. It does not claim to support unknown
 layouts, bypass YouTube Premium, or remove downloads via undocumented endpoints.
 Your actual YouTube account/downloads were not accessed during development.
 
-For a **read-only first test**, update/reload the unpacked v0.1.6 extension,
+For a **read-only first test**, update/reload the unpacked v0.1.7 extension,
 refresh YouTube before disconnecting, play an existing local download with the
 network disconnected, and click **Check native control**. Use **Details** to
 report `nativeControlStatus`/`nativeControlReason`. Do not confirm removal until
@@ -153,14 +176,14 @@ extension certification.
 
 **Updating an unpacked Edge installation:** replace your existing unpacked folder
 with the current Chromium build, then open `edge://extensions`, click **Reload**
-on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.6**
+on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.7**
 on the extension's details page. Updating repository files alone does not update
 an already-installed local copy.
 
 Do not add generic destructive labels or attempt to force unsupported controls.
 See [privacy](docs/PRIVACY.md) and [security](SECURITY.md).
 
-### Read-only native-control check (0.1.6)
+### Read-only native-control check (0.1.7)
 
 1. Keep a downloaded video open in the player and disconnect from the internet.
 2. Click **Check native control**. The extension prepares a native renderer in

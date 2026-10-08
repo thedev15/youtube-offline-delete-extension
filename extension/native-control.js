@@ -169,7 +169,9 @@
           if (sameId(confirm.control, id) && offersAdd(confirm.control)) {
             await sleep(500);
             if (currentId() === id && sameId(original.control, id) && sameId(confirm.control, id) && offersAdd(original.control) && offersAdd(confirm.control)) {
-              return {status: "removed", reason: "Native UI indicates removal: two controls now offer Download.", nextDownloaded: await nextDownloaded(nextId, id)};
+              // Both controls can reflect optimistic/shared UI state while the
+              // offline copy survives. Never promote this to durable success.
+              return {status: "unverified", reason: "Native UI changed, but persistent deletion has not been verified. The saved copy may still exist. No retry or automatic advance."};
             }
           }
         }
@@ -222,6 +224,6 @@
   });
   window.addEventListener("pagehide", clear);
   document.addEventListener("yt-navigate-finish", clear);
-  document.documentElement.setAttribute("data-yto-native-version", "0.1.6");
+  document.documentElement.setAttribute("data-yto-native-version", "0.1.7");
   stage("ready");
 })();
