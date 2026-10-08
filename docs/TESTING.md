@@ -19,6 +19,10 @@
   state transition, non-downloaded target refusal, unverified removal without
   retry/navigation, and non-downloaded next-video refusal. No iframe/new tab.
   Programmatic confirmation is rejected: MAIN requires a trusted user click.
+  Document-event transport is tested with window messages blocked, explicit
+  other-video rejection, and acknowledgement/stage diagnostics with private
+  identifiers excluded. This simulates message interference, not a proven root
+  cause of the live v0.1.3 Edge timeout.
   The fixture deliberately implements a synthetic renderer lifecycle. It does
   NOT establish that creating/data-binding this renderer works on live YouTube.
 - Chromium uses a real unpacked extension in a fresh temporary browser profile
@@ -50,7 +54,7 @@ Using a disposable download you explicitly consent to removing:
 10. Safari: use macOS conversion/build, enable permissions, and test the actual addon.
 11. Check the browser's native YouTube download availability; unsupported browsers
     cannot gain native offline support from this extension.
-12. Edge: verify version 0.1.3 after reloading the unpacked extension and refreshing
+12. Edge: verify version 0.1.4 after reloading the unpacked extension and refreshing
     YouTube. A disabled button must explain the condition and offer Details; its
     report must not contain account information, video IDs/titles or URLs.
 13. In the live offline player without a sidebar menu, run **Check native control**

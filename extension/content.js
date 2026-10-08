@@ -16,17 +16,33 @@
   let nativeState = {status: "unchecked", reason: "Native control has not been checked."};
   let probing = false;
   const CHANNEL = "yt-offline-native-control-v1";
+  const REQUEST_EVENT = "yt-offline-native-request-v2";
+  const RESPONSE_EVENT = "yt-offline-native-response-v2";
+  let bridgeState = {transport: "document-json-event", requestAcknowledged: false, replyReceived: false};
   function nativeRequest(operation, id, nextId = null) {
     const nonce = crypto.randomUUID().replaceAll("-", "");
+    bridgeState = {transport: "document-json-event", requestAcknowledged: false, replyReceived: false};
     return new Promise((resolve, reject) => {
       const listener = event => {
-        const data = event.data;
-        if (event.source !== window || event.origin !== location.origin || data?.channel !== CHANNEL || data.direction !== "response" || data.nonce !== nonce || data.videoId !== id) return;
-        clearTimeout(timer); window.removeEventListener("message", listener); resolve(data);
+        if (event.target !== document || typeof event.detail !== "string" || event.detail.length > 4096) return;
+        let data;
+        try {data = JSON.parse(event.detail);} catch {return;}
+        if (data?.channel !== CHANNEL || data.nonce !== nonce || data.videoId !== id) return;
+        if (data.direction === "acknowledgement") {bridgeState.requestAcknowledged = true; return;}
+        if (data.direction !== "response") return;
+        bridgeState.replyReceived = true;
+        clearTimeout(timer); document.removeEventListener(RESPONSE_EVENT, listener, true); resolve(data);
       };
-      const timer = setTimeout(() => {window.removeEventListener("message", listener); reject(new Error("The native-control adapter did not respond. No automatic retry or navigation."));}, 15000);
-      window.addEventListener("message", listener);
-      window.postMessage({channel: CHANNEL, direction: "request", nonce, operation, videoId: id, nextVideoId: nextId}, location.origin);
+      const timer = setTimeout(() => {
+        document.removeEventListener(RESPONSE_EVENT, listener, true);
+        reject(new Error(bridgeState.requestAcknowledged ? "Native adapter acknowledged the request but did not complete it. No retry or navigation." : "Native adapter did not acknowledge the document-event request. No retry or navigation."));
+      }, 15000);
+      document.addEventListener(RESPONSE_EVENT, listener, true);
+      try {document.dispatchEvent(new CustomEvent(REQUEST_EVENT, {detail: JSON.stringify({channel: CHANNEL, direction: "request", nonce, operation, videoId: id, nextVideoId: nextId})}));}
+      catch {
+        clearTimeout(timer); document.removeEventListener(RESPONSE_EVENT, listener, true);
+        reject(new Error("Document-event dispatch failed. No retry or navigation."));
+      }
     });
   }
   async function checkNative() {
@@ -134,7 +150,12 @@
       matchingRowMenuElementTags: [...new Set(menuTags)], language: /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(document.documentElement.lang) ? document.documentElement.lang : "unknown",
       nextAfterRemoval: settings.advanceAfterRemoval,
       nativeControlStatus: nativeState.status,
-      nativeControlReason: nativeState.reason};
+      nativeControlReason: nativeState.reason,
+      nativeBridge: {
+        ...bridgeState,
+        adapterVersion: document.documentElement.getAttribute("data-yto-native-version") === "0.1.4" ? "0.1.4" : "missing-or-other-version",
+        adapterStage: ["ready", "request-received", "request-rejected", "probe-running", "remove-running", "response-sent", "reply-failed"].find(value => value === document.documentElement.getAttribute("data-yto-native-stage")) || "missing-or-unknown"
+      }};
   }
   function showDetails() {
     if (modal || busy) return;

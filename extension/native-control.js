@@ -3,6 +3,9 @@
   "use strict";
   if (window.top !== window) return;
   const CHANNEL = "yt-offline-native-control-v1";
+  const REQUEST_EVENT = "yt-offline-native-request-v2";
+  const RESPONSE_EVENT = "yt-offline-native-response-v2";
+  const stage = value => document.documentElement.setAttribute("data-yto-native-stage", value);
   const TAG = "ytd-menu-service-item-download-renderer";
   const REMOVE = new Set(["remove from downloads", "delete from downloads", "remove download", "delete download"]);
   const ADD = new Set(["download", "download video"]);
@@ -121,12 +124,21 @@
       return {status: "unverified", reason: "Native removal was requested once, but the native UI state change could not be verified. No retry or next-video navigation."};
     } finally {confirm?.container.remove(); clear();}
   }
-  window.addEventListener("message", async event => {
-    const request = event.data;
-    if (event.source !== window || event.origin !== location.origin || request?.channel !== CHANNEL || request.direction !== "request") return;
-    if (!/^[A-Za-z0-9_-]{16,80}$/.test(request.nonce || "") || request.videoId !== currentId()) return;
-    if (!["probe", "remove"].includes(request.operation)) return;
-    const reply = result => window.postMessage({channel: CHANNEL, direction: "response", nonce: request.nonce, videoId: request.videoId, ...result}, location.origin);
+  async function handleRequest(request, send) {
+    if (request?.channel !== CHANNEL || request.direction !== "request") return;
+    if (typeof request.nonce !== "string" || !/^[A-Za-z0-9_-]{16,80}$/.test(request.nonce)) {stage("request-rejected"); return;}
+    stage("request-received");
+    const packet = (direction, result) => ({channel: CHANNEL, direction, nonce: request.nonce, videoId: request.videoId, ...result});
+    const reply = result => {
+      try {send(packet("response", result)); stage("response-sent");}
+      catch {stage("reply-failed");}
+    };
+    try {send(packet("acknowledgement", {}));}
+    catch {stage("reply-failed"); return;}
+    if (request.videoId !== currentId() || !["probe", "remove"].includes(request.operation)) {
+      reply({status: "failed", reason: "Native request did not match the current player or supported operation. No native action was executed."});
+      return;
+    }
     if (removing) {reply({status: "busy", reason: "A native removal request is already active."}); return;}
     if (request.operation === "remove") {
       const allowed = consent?.id === request.videoId && consent.expires >= Date.now();
@@ -134,10 +146,24 @@
       if (!allowed) {reply({status: "failed", reason: "No fresh user confirmation was observed. No native action was executed."}); return;}
     }
     removing = true;
+    stage(request.operation === "probe" ? "probe-running" : "remove-running");
     try {reply(await (request.operation === "probe" ? prepare(request.videoId) : remove(request.videoId, request.nextVideoId)));}
     catch {clear(); reply({status: "failed", reason: "Native control preparation or verification failed. No automatic retry or navigation."});}
     finally {removing = false;}
+  }
+  document.addEventListener(REQUEST_EVENT, event => {
+    if (event.target !== document || typeof event.detail !== "string" || event.detail.length > 4096) return;
+    let request;
+    try {request = JSON.parse(event.detail);} catch {stage("request-rejected"); return;}
+    handleRequest(request, packet => document.dispatchEvent(new CustomEvent(RESPONSE_EVENT, {detail: JSON.stringify(packet)})));
+  }, true);
+  // Retain the old diagnostic transport, but never fall back/retry a removal.
+  window.addEventListener("message", event => {
+    if (event.source !== window || event.origin !== location.origin) return;
+    handleRequest(event.data, packet => window.postMessage(packet, location.origin));
   });
   window.addEventListener("pagehide", clear);
   document.addEventListener("yt-navigate-finish", clear);
+  document.documentElement.setAttribute("data-yto-native-version", "0.1.4");
+  stage("ready");
 })();

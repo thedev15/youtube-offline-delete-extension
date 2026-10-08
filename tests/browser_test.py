@@ -92,6 +92,35 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         finally:
             context.set_offline(False)
     case('native adapter removes once and advances offline fixture without sidebar menu, frame or new tab',native_positive)
+    def native_message_interference(page):
+        page.evaluate('window.addEventListener("message",event=>event.stopImmediatePropagation(),true);window.postMessage=()=>{throw new Error("Fixture blocked postMessage")};')
+        native_positive(page)
+    case('document bridge works when window message delivery is blocked',native_message_interference)
+    def native_bridge_details(page):
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #details').click()
+        text=page.locator('#yt-offline-remove-host pre').inner_text()
+        report=json.loads(text)
+        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.4','adapterStage':'response-sent'}
+        for private in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Current video','videoId']:
+            assert private not in text
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+    case('bridge stage diagnostics show acknowledgement and reply without private identifiers',native_bridge_details)
+    def native_bad_request(page):
+        result=page.evaluate('''() => new Promise(resolve => {
+          const nonce="invalidtarget0123456789";
+          const listener=event=>{
+            const data=JSON.parse(event.detail);
+            if(data.nonce!==nonce||data.direction!=="response")return;
+            document.removeEventListener("yt-offline-native-response-v2",listener,true);
+            resolve(data.status);
+          };
+          document.addEventListener("yt-offline-native-response-v2",listener,true);
+          document.dispatchEvent(new CustomEvent("yt-offline-native-request-v2",{detail:JSON.stringify({channel:"yt-offline-native-control-v1",direction:"request",nonce,operation:"remove",videoId:"bbbbbbbbbbb"})}));
+        })''')
+        assert result=='failed'
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+    case('document bridge explicitly rejects another-video removal without a click',native_bad_request)
     def native_cancel(page):
         prepare_native(page)
         page.locator('#yt-offline-remove-host #remove').click()

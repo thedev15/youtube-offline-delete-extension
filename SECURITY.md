@@ -35,3 +35,10 @@ open shadow DOM share YouTube's page trust boundary; they are not a security
 boundary against a malicious first-party page. The bridge exposes no additional
 extension privileges, credentials, storage-deletion API or network endpoint.
 Live offline testing with a consented disposable copy is a release gate.
+
+Version 0.1.4 extension requests use named document events with JSON-string
+payloads, length bounds and nonce matching. These events are not an authentication
+boundary against the first-party page. The same trusted-confirmation gate and
+exact current-video validation apply to both document events and retained legacy
+message diagnostics. No automatic removal retries or transport fallback.
+Startup/stage attributes contain only fixed version/stage values, not identifiers.
