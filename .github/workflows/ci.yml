@@ -1,0 +1,65 @@
+name: Extension checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  unit-and-packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: node --test tests/shared.test.cjs
+      - name: Syntax and source checks
+        run: |
+          for file in extension/*.js; do node --check "$file"; done
+          python -m py_compile tools/build.py tests/browser_test.py
+      - name: Build twice and verify reproducibility
+        run: |
+          python tools/build.py
+          cp dist/SHA256SUMS first-checksums
+          python tools/build.py
+          cmp first-checksums dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension-packages
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+  browser-fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'playwright==1.63.0'
+      - run: python -m playwright install --with-deps ${{ matrix.browser }}
+      - run: python tools/build.py
+      - name: DOM fixture tests across engines
+        run: python tests/browser_test.py --browser ${{ matrix.browser }}
+      - name: Actual Chromium unpacked extension test
+        if: matrix.browser == 'chromium'
+        run: python tests/browser_test.py --browser chromium --extension
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence-${{ matrix.browser }}
+          path: test-results/
+          if-no-files-found: warn
+          retention-days: 30

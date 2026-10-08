@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YouTube Offline Remove — settings</title><link rel="stylesheet" href="options.css"></head>
+<body><main>
+  <h1>YouTube Offline Remove</h1>
+  <p>Removal requires the current video's row in the Downloads sidebar and YouTube's own removal menu. No download-page navigation, private APIs, or download bypasses are used.</p>
+  <p>English labels are supported by default. For another YouTube language, enter the <strong>exact displayed labels</strong> below, one per line. Matching ignores case and extra spaces. Do not add generic labels such as “Delete” or “Remove”: they could identify an unrelated action.</p>
+  <form id="settings">
+    <label for="panels">Downloads sidebar titles</label><textarea id="panels" rows="4" maxlength="1200" required></textarea>
+    <label for="labels">Native removal action labels</label><textarea id="labels" rows="5" maxlength="1200" required></textarea>
+    <p>Maximum 12 labels per field, 100 characters each. Every removal requires confirmation; this cannot be disabled.</p>
+    <button type="submit">Save settings</button><button id="reset" type="button">Restore English defaults</button>
+    <p id="status" role="status" aria-live="polite"></p>
+  </form>
+  <h2>Privacy and scope</h2>
+  <p>No analytics, account credentials, cookies, video files, or private YouTube endpoints. Only these settings use browser sync storage. Your browser provider may sync them if you enable browser sync. The extension does not provide or bypass YouTube Premium downloads.</p>
+</main><script src="shared.js"></script><script src="options.js"></script></body>
+</html>
