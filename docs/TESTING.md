@@ -5,7 +5,7 @@
 - Node built-in tests: URL/origin constraints, label normalization and bounds,
   generic destructive-label rejection, callback/Promise storage, storage errors,
   and minimum-permission manifests.
-- Twenty-three DOM scenarios per browser engine: action-row placement; Cancel; exact
+- Twenty-six DOM scenarios per browser engine: action-row placement; Cancel; exact
   confirmed removal; focus trap/Escape; SPA routing; stale confirmation; missing
   sidebar; unrelated playlist; duplicate rows; generic/ambiguous native actions;
   unverified removal with no retry; row disappearance during confirmation;
@@ -14,6 +14,10 @@
   modern list-item action; no duplicate native auto-advance; last-download behavior;
   re-rendered row not mistaken for deletion. Verified removal tests also check
   next-video navigation, while failure tests check that no next-video click occurs.
+- Read-only in-page probe: cached fixture matching, private-value exclusion, no
+  new tab or removal, inert embedded view, navigation cleanup, and unavailable
+  embedded-view failure. These fixtures do not verify YouTube's live framing
+  policy, actual browser-cache availability, or offline deletion.
 - Chromium uses a real unpacked extension in a fresh temporary browser profile
   under `test-results/`. Firefox/WebKit tests inject the exact scripts with a
   mock extension-storage interface; this validates DOM code, not addon APIs/loading.
@@ -43,9 +47,15 @@ Using a disposable download you explicitly consent to removing:
 10. Safari: use macOS conversion/build, enable permissions, and test the actual addon.
 11. Check the browser's native YouTube download availability; unsupported browsers
     cannot gain native offline support from this extension.
-12. Edge: verify version 0.1.1 after reloading the unpacked extension and refreshing
+12. Edge: verify version 0.1.2 after reloading the unpacked extension and refreshing
     YouTube. A disabled button must explain the condition and offer Details; its
     report must not contain account information, video IDs/titles or URLs.
+13. In the confirmed live layout without a watch-page removal menu, do not claim
+    offline removal support. Run the read-only Check offline support probe with
+    the actual network disconnected. If its embedded UI is unavailable, stop;
+    do not bypass frame policies, guess storage-record deletion, or open a helper
+    tab. Even an accessible cached view still needs a native-action adapter and
+    consented live removal/offline-next-playback verification.
 
 This initial version is a reviewed/tested **preview**, not a claim that every
 YouTube deployment has matching menu renderers. Unsupported layouts need a new

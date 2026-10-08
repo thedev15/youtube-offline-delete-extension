@@ -1,5 +1,6 @@
 (() => {
   "use strict";
+  if (window.top !== window) return;
   if (document.getElementById("yt-offline-remove-host")) return;
   const {normalize, videoId, sanitizeSettings, storage, extensionApi} = globalThis.YTOfflineRemove;
   const PANEL_SELECTOR = "ytd-playlist-panel-renderer";

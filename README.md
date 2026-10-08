@@ -5,6 +5,15 @@ video actions below a YouTube watch-page player—the area marked in the request
 design. It uses **YouTube's own Downloads-sidebar menu**, not private APIs or
 direct deletion of browser storage.
 
+**Offline playback limitation:** the live Edge watch-page Downloads sidebar has
+been reported not to expose a native removal control. The current native-menu
+adapter therefore does **not** provide verified offline in-player deletion.
+Version **0.1.2** adds a **read-only “Check offline support”** button to test whether
+the cached Downloads UI can load inside the player page. It opens no tab, does
+not navigate the player, and performs no removal. An embedded view can be blocked
+by YouTube's framing policy or fail to load from cache. This is a feasibility
+check, not an offline-removal fix; synthetic fixtures do not prove live support.
+
 ## What it does
 
 - Finds the current video by its exact 11-character watch URL ID.
@@ -88,12 +97,29 @@ extension certification.
 
 **Updating an unpacked Edge installation:** replace your existing unpacked folder
 with the current Chromium build, then open `edge://extensions`, click **Reload**
-on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.1**
+on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.2**
 on the extension's details page. Updating repository files alone does not update
 an already-installed local copy.
 
 Do not add generic destructive labels or attempt to force unsupported controls.
 See [privacy](docs/PRIVACY.md) and [security](SECURITY.md).
+
+### Read-only offline feasibility check (0.1.2)
+
+1. Keep a downloaded video open in the player and disconnect from the internet.
+2. Click **Check offline support**. A non-interactive embedded Downloads view
+   appears inside the current page; the extension creates no helper tab.
+3. Wait up to 15 seconds and copy the report. It exposes only capability flags,
+   counts and element types, not video identifiers, titles, URLs or account data.
+4. Close the check. No native removal action is clicked and playback is not
+   advanced. A successful structure check is not proof of successful deletion or
+   next-video offline playback. Those need a separate live, explicitly confirmed
+   test after an adapter is implemented.
+
+`browserReportsOnline` reflects the browser's connectivity hint, not proof that
+the internet is unreachable. Disconnect the real network for a meaningful test.
+The extension only reads the embedded DOM; YouTube manages its own page/cache
+behavior. It does not bypass a framing block or access private storage schemas.
 
 ## Tests
 

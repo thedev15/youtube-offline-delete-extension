@@ -4,6 +4,7 @@
 <body><main>
   <h1>YouTube Offline Remove</h1>
   <p>Removal requires the current video's row in the Downloads sidebar and YouTube's own removal menu. No download-page navigation, private APIs, or download bypasses are used.</p>
+  <p><strong>Offline limitation:</strong> a player layout without a native removal menu is not supported by the current removal adapter. “Check offline support” is read-only: it tests an embedded cached Downloads view, opens no tab and does not delete anything.</p>
   <p>English labels are supported by default. For another YouTube language, enter the <strong>exact displayed labels</strong> below, one per line. Matching ignores case and extra spaces. Do not add generic labels such as “Delete” or “Remove”: they could identify an unrelated action.</p>
   <form id="settings">
     <label for="panels">Downloads sidebar titles</label><textarea id="panels" rows="4" maxlength="1200" required></textarea>

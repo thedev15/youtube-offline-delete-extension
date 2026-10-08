@@ -20,6 +20,10 @@ assert not args.extension or args.browser=='chromium'
 out=ROOT/'test-results'/args.browser
 out.mkdir(parents=True,exist_ok=True)
 fixture=(ROOT/'tests/fixture.html').read_text()
+downloads_fixture='''<!doctype html><html lang="en"><body><h1>Downloads</h1>
+<ytd-rich-item-renderer><ytd-rich-grid-media><a href="/watch?v=aaaaaaaaaaa">Private fixture video title</a><ytd-menu-renderer><button aria-haspopup="true">Menu</button></ytd-menu-renderer></ytd-rich-grid-media></ytd-rich-item-renderer>
+<ytd-rich-item-renderer><ytd-rich-grid-media><a href="/watch?v=bbbbbbbbbbb">Next fixture video title</a></ytd-rich-grid-media></ytd-rich-item-renderer>
+</body></html>'''
 results=[]
 errors=[]
 
@@ -36,9 +40,9 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         context=browser.new_context(viewport={'width':1440,'height':900})
         context.add_init_script('window.browser={storage:{sync:{get:async()=>({}),set:async()=>{}},onChanged:{addListener:()=>{}}}};\n'+
             (ROOT/'extension/shared.js').read_text()+"\ndocument.addEventListener('DOMContentLoaded', () => {\n"+
-            (ROOT/'extension/content.js').read_text()+"\n});")
+            (ROOT/'extension/content.js').read_text()+"\n"+(ROOT/'extension/offline-check.js').read_text()+"\n});")
     # The only navigated URL is intercepted. No live account or video is involved.
-    context.route('https://www.youtube.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=fixture))
+    context.route('https://www.youtube.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=downloads_fixture if '/feed/downloads' in route.request.url else fixture))
     context.set_default_timeout(10000)
     def fresh():
         page=context.new_page()
@@ -68,6 +72,45 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         assert page.locator('ytd-watch-metadata #actions #yt-offline-remove-host').count()==1
         page.screenshot(path=str(out/'placement.png'))
     case('button in video action row',placement)
+    def offline_probe(page):
+        original_url=page.url
+        original_page_count=len(context.pages)
+        context.set_offline(True)
+        try:
+            page.locator('#yt-offline-remove-host #offline-check').click()
+            expect(page.locator('#yt-offline-remove-host pre')).to_contain_text('Cached view structure detected')
+            report=json.loads(page.locator('#yt-offline-remove-host pre').inner_text())
+            assert report['browserReportsOnline'] is False
+            assert report['downloadsRouteLoaded'] and report['matchingCardCount']==1
+            assert 'button' in report['matchingCardMenuElementTypes']
+            text=json.dumps(report)
+            for private_value in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Private fixture video title']:
+                assert private_value not in text
+            assert page.url==original_url and len(context.pages)==original_page_count
+            assert page.evaluate('fixture.removed===0 && fixture.opened===0 && fixture.navigated===0')
+            assert len(page.frames)==2
+            expect(page.locator('#yt-offline-remove-host iframe')).to_have_attribute('sandbox','allow-scripts allow-same-origin')
+            expect(page.locator('#yt-offline-remove-host iframe')).to_have_attribute('inert','')
+            page.locator('#yt-offline-remove-host #offline-close').click()
+            expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
+        finally:
+            context.set_offline(False)
+    case('read-only in-page offline probe opens no tab, makes no deletion and hides private values',offline_probe)
+    def cancelled_probe(page):
+        page.locator('#yt-offline-remove-host #offline-check').click()
+        page.evaluate("history.pushState({},'', '/watch?v=bbbbbbbbbbb');document.dispatchEvent(new Event('yt-navigate-finish'))")
+        expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
+        assert page.evaluate('fixture.removed===0 && fixture.opened===0')
+    case('navigation cancels read-only probe and removes its embedded view',cancelled_probe)
+    def unsupported_probe(page):
+        page.route('https://www.youtube.com/feed/downloads',lambda route:route.fulfill(status=200,content_type='text/html',body='<html><body>Unavailable offline</body></html>'))
+        page.locator('#yt-offline-remove-host #offline-check').click()
+        expect(page.locator('#yt-offline-remove-host pre')).to_contain_text('unavailable or unsupported',timeout=20000)
+        assert page.evaluate('fixture.removed===0 && fixture.opened===0 && fixture.navigated===0')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        page.keyboard.press('Escape')
+        expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
+    case('unsupported embedded Downloads view never deletes or navigates',unsupported_probe)
     def cancel(page):
         page.locator('#yt-offline-remove-host #remove').click()
         page.locator('#yt-offline-remove-host #cancel').click()
