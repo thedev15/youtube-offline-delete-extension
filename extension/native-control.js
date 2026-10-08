@@ -30,17 +30,42 @@
   function labels(control) {
     return [...control.querySelectorAll("yt-formatted-string")].map(node => normalize(node.textContent));
   }
+  const TARGET_SELECTOR = "tp-yt-paper-item, button, [role=menuitem]";
+  function targets(control) {
+    const nodes = [...control.querySelectorAll(TARGET_SELECTOR)];
+    return nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
+  }
+  function ownsRemovalLabel(node) {
+    const owned = [...node.querySelectorAll("yt-formatted-string")]
+      .filter(label => label.closest(TARGET_SELECTOR) === node)
+      .map(label => normalize(label.textContent));
+    return owned.some(value => REMOVE.has(value)) && !owned.some(value => ADD.has(value));
+  }
+  function eligible(node, control) {
+    if (!node.isConnected || !control.contains(node)) return false;
+    // Ignore the adapter's intentionally offscreen/aria-hidden container, but
+    // honor native target and control state, including native hidden wrappers.
+    for (let part = node; part && part !== control.parentElement; part = part.parentElement) {
+      if (part.disabled || part.hasAttribute("disabled") || part.hidden ||
+          part.getAttribute("aria-disabled") === "true" || part.getAttribute("aria-hidden") === "true") return false;
+      const style = getComputedStyle(part);
+      if (style.display === "none" || ["hidden", "collapse"].includes(style.visibility) || style.opacity === "0") return false;
+    }
+    return [...node.getClientRects()].some(rect => rect.width > 0 && rect.height > 0);
+  }
+  function removalTargets(control) {
+    const matching = targets(control).filter(ownsRemovalLabel);
+    return {matching, eligible: matching.filter(node => eligible(node, control))};
+  }
   function clickable(control) {
-    const nodes = [...control.querySelectorAll("tp-yt-paper-item, button, [role=menuitem]")];
-    const outer = nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
-    const node = outer.length === 1 ? outer[0] : null;
-    return node && !node.disabled && node.getAttribute("aria-disabled") !== "true" ? node : null;
+    const candidates = removalTargets(control).eligible;
+    return candidates.length === 1 ? candidates[0] : null;
   }
   function snapshot(control, id) {
     if (!control) return null;
     const text = labels(control);
-    const nodes = [...control.querySelectorAll("tp-yt-paper-item, button, [role=menuitem]")];
-    const outer = nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
+    const outer = targets(control);
+    const removal = removalTargets(control);
     const shadowLabels = control.shadowRoot ? [...control.shadowRoot.querySelectorAll("yt-formatted-string")].map(node => normalize(node.textContent)) : [];
     let bindingMatches = null;
     try {bindingMatches = sameId(control, id);} catch { /* Record access failure without exception text. */ }
@@ -54,6 +79,8 @@
       removalLabelSeen: text.some(value => REMOVE.has(value)),
       downloadLabelSeen: text.some(value => ADD.has(value)),
       nativeClickTargetCount: outer.length,
+      removalLabeledTargetCount: removal.matching.length,
+      eligibleRemovalTargetCount: removal.eligible.length,
       eligibleNativeClickTarget: Boolean(clickable(control)),
       openShadowRoot: Boolean(control.shadowRoot),
       shadowFormattedLabelCount: shadowLabels.length,
@@ -195,6 +222,6 @@
   });
   window.addEventListener("pagehide", clear);
   document.addEventListener("yt-navigate-finish", clear);
-  document.documentElement.setAttribute("data-yto-native-version", "0.1.5");
+  document.documentElement.setAttribute("data-yto-native-version", "0.1.6");
   stage("ready");
 })();

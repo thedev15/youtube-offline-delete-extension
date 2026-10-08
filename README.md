@@ -9,7 +9,7 @@ or directly delete browser storage.
 **Offline playback limitation:** the live Edge watch-page Downloads sidebar has
 been reported not to expose a native removal control. The current native-menu
 adapter therefore does **not** provide verified offline in-player deletion.
-Version **0.1.5** includes an experimental
+Version **0.1.6** includes an experimental
 **Check native control** adapter. It creates YouTube's
 `ytd-menu-service-item-download-renderer` in the player page, supplying only the
 observed `serviceEndpoint.offlineVideoEndpoint.videoId` payload. The check does
@@ -21,7 +21,7 @@ the native DOM click handler—never guessed `sendOfflineAction` arguments.
 this component, or construction/data assignment might not initialize it outside
 the real menu. Those cases must stop without removal. Fixture success does not
 prove YouTube's lifecycle, local-copy deletion or actual next-video playback.
-No helper tab, iframe or Downloads-page navigation is used by v0.1.5.
+No helper tab, iframe or Downloads-page navigation is used by v0.1.6.
 
 ### Bridge timeout investigation
 
@@ -46,6 +46,17 @@ label flags. The snapshot is captured before temporary-control cleanup. It never
 includes actual IDs, labels, titles, controller data or exception text. No native
 removal handlers or gating criteria were changed. This distinguishes an empty
 render from a label/binding/target mismatch without guessing method arguments.
+
+The live v0.1.5 report confirmed binding, rendering and a removal label, but
+contained two outer click candidates. v0.1.6 replaces the total-candidate veto
+with exact-label ownership: an outer native target must own the recognized
+removal label (nearest matching target), be enabled and rendered, and not be
+inside a native hidden/disabled wrapper. Exactly one eligible removal target is
+required; no first-candidate fallback. Nested target ambiguity and unowned labels
+remain unsupported. `removalLabeledTargetCount` and `eligibleRemovalTargetCount`
+are included in Details. Selection is revalidated immediately before the one
+confirmed click. Current-ID, trusted confirmation, no retry and UI-verification
+checks remain. This addresses a code-level blocker, not proof of live deletion.
 
 ## What it does
 
@@ -77,7 +88,7 @@ that removal cannot be verified. It does not claim to support unknown
 layouts, bypass YouTube Premium, or remove downloads via undocumented endpoints.
 Your actual YouTube account/downloads were not accessed during development.
 
-For a **read-only first test**, update/reload the unpacked v0.1.5 extension,
+For a **read-only first test**, update/reload the unpacked v0.1.6 extension,
 refresh YouTube before disconnecting, play an existing local download with the
 network disconnected, and click **Check native control**. Use **Details** to
 report `nativeControlStatus`/`nativeControlReason`. Do not confirm removal until
@@ -142,14 +153,14 @@ extension certification.
 
 **Updating an unpacked Edge installation:** replace your existing unpacked folder
 with the current Chromium build, then open `edge://extensions`, click **Reload**
-on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.5**
+on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.6**
 on the extension's details page. Updating repository files alone does not update
 an already-installed local copy.
 
 Do not add generic destructive labels or attempt to force unsupported controls.
 See [privacy](docs/PRIVACY.md) and [security](SECURITY.md).
 
-### Read-only native-control check (0.1.5)
+### Read-only native-control check (0.1.6)
 
 1. Keep a downloaded video open in the player and disconnect from the internet.
 2. Click **Check native control**. The extension prepares a native renderer in

@@ -26,6 +26,12 @@
   Structural snapshots test empty renderer and recognized removal label without
   an eligible click target. Unsupported checks remain disabled, make zero native
   clicks/navigation and retain only booleans/counts captured before cleanup.
+  Target-ownership fixtures include an unrelated first candidate, hidden/disabled
+  duplicate removal targets, two eligible removal targets, a disabled/hidden
+  target or native wrapper, nested target ambiguity, unowned removal label, and
+  a new ambiguity appearing during confirmation. Only one eligible exact-label
+  owner may be selected; unrelated handlers must never execute. The unique
+  selection is revalidated immediately before the confirmed click.
   The fixture deliberately implements a synthetic renderer lifecycle. It does
   NOT establish that creating/data-binding this renderer works on live YouTube.
 - Chromium uses a real unpacked extension in a fresh temporary browser profile
@@ -57,7 +63,7 @@ Using a disposable download you explicitly consent to removing:
 10. Safari: use macOS conversion/build, enable permissions, and test the actual addon.
 11. Check the browser's native YouTube download availability; unsupported browsers
     cannot gain native offline support from this extension.
-12. Edge: verify version 0.1.5 after reloading the unpacked extension and refreshing
+12. Edge: verify version 0.1.6 after reloading the unpacked extension and refreshing
     YouTube. A disabled button must explain the condition and offer Details; its
     report must not contain account information, video IDs/titles or URLs.
 13. In the live offline player without a sidebar menu, run **Check native control**

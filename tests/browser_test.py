@@ -101,7 +101,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('#yt-offline-remove-host #details').click()
         text=page.locator('#yt-offline-remove-host pre').inner_text()
         report=json.loads(text)
-        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.5','adapterStage':'response-sent'}
+        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.6','adapterStage':'response-sent'}
         structure=report['nativeControlStructure']
         assert structure['bindingMatches'] and structure['removalLabelSeen'] and structure['eligibleNativeClickTarget']
         assert structure['formattedLabelCount']==1 and structure['nativeClickTargetCount']==1
@@ -133,6 +133,47 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.navigated===0')
     case('empty native renderer reports structure before cleanup without actions',lambda page:unsupported_structure(page,'empty'))
     case('native removal label without a click target is diagnosed and never enabled',lambda page:unsupported_structure(page,'no-click-target'))
+    def multi_target_positive(page,mode,matching):
+        page.evaluate('(mode)=>{fixture.nativeRenderMode=mode}',mode)
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #details').click()
+        text=page.locator('#yt-offline-remove-host pre').inner_text()
+        report=json.loads(text)
+        structure=report['nativeControlStructure']
+        assert structure['nativeClickTargetCount']==2
+        assert structure['removalLabeledTargetCount']==matching
+        assert structure['eligibleRemovalTargetCount']==1 and structure['eligibleNativeClickTarget']
+        for private in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Current video','videoId']:
+            assert private not in text
+        page.locator('#yt-offline-remove-host #close-details').click()
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeOther===0')
+        click_confirm(page)
+        expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
+        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.nativeOther===0 && fixture.navigated===1')
+    for mode,matching in [('two-targets',1),('hidden-duplicate',2),('disabled-duplicate',2)]:
+        case('select unique eligible removal-label owner: '+mode,lambda page,m=mode,c=matching:multi_target_positive(page,m,c))
+    def rejected_target(page,mode,eligible):
+        page.evaluate('(mode)=>{fixture.nativeRenderMode=mode}',mode)
+        page.locator('ytd-playlist-panel-renderer #header').evaluate('(node)=>node.remove()')
+        page.locator('#yt-offline-remove-host #native-check').click()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('did not pass',timeout=15000)
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        page.locator('#yt-offline-remove-host #details').click()
+        report=json.loads(page.locator('#yt-offline-remove-host pre').inner_text())
+        assert report['nativeControlStatus']=='unsupported'
+        assert report['nativeControlStructure']['eligibleRemovalTargetCount']==eligible
+        assert not report['nativeControlStructure']['eligibleNativeClickTarget']
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.nativeOther===0 && fixture.navigated===0')
+    for mode,eligible in [('ambiguous-targets',2),('disabled-target',0),('hidden-target',0),('hidden-wrapper',0),('nested-target',0),('stray-label',0)]:
+        case('reject ambiguous/ineligible/unowned removal label: '+mode,lambda page,m=mode,c=eligible:rejected_target(page,m,c))
+    def changed_target(page):
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #remove').click()
+        page.evaluate('() => {fixture.nativeRenderMode="ambiguous-targets"; document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh());}')
+        page.locator('#yt-offline-remove-host #confirm').click()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('verification failed')
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.nativeOther===0 && fixture.navigated===0')
+    case('revalidate unique eligible removal target immediately before confirmed click',changed_target)
     def native_bad_request(page):
         result=page.evaluate('''() => new Promise(resolve => {
           const nonce="invalidtarget0123456789";

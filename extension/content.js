@@ -154,7 +154,7 @@
       nativeControlStructure: safeStructure(nativeState.structure),
       nativeBridge: {
         ...bridgeState,
-        adapterVersion: document.documentElement.getAttribute("data-yto-native-version") === "0.1.5" ? "0.1.5" : "missing-or-other-version",
+        adapterVersion: document.documentElement.getAttribute("data-yto-native-version") === "0.1.6" ? "0.1.6" : "missing-or-other-version",
         adapterStage: ["ready", "request-received", "request-rejected", "probe-running", "remove-running", "response-sent", "reply-failed"].find(value => value === document.documentElement.getAttribute("data-yto-native-stage")) || "missing-or-unknown"
       }};
   }
@@ -162,7 +162,7 @@
     if (!value || typeof value !== "object") return null;
     const result = {};
     for (const key of ["bindingMatches", "connected", "formattedTextPresent", "removalLabelSeen", "downloadLabelSeen", "eligibleNativeClickTarget", "openShadowRoot", "shadowRemovalLabelSeen", "shadowDownloadLabelSeen"]) result[key] = typeof value[key] === "boolean" ? value[key] : null;
-    for (const key of ["directChildCount", "descendantCount", "formattedLabelCount", "nativeClickTargetCount", "shadowFormattedLabelCount"]) result[key] = Number.isInteger(value[key]) && value[key] >= 0 && value[key] <= 100000 ? value[key] : null;
+    for (const key of ["directChildCount", "descendantCount", "formattedLabelCount", "nativeClickTargetCount", "removalLabeledTargetCount", "eligibleRemovalTargetCount", "shadowFormattedLabelCount"]) result[key] = Number.isInteger(value[key]) && value[key] >= 0 && value[key] <= 100000 ? value[key] : null;
     return result;
   }
   function showDetails() {
