@@ -98,6 +98,13 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('#yt-offline-remove-host #cancel').click()
         assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
     case('native confirmation Cancel never invokes native action',native_cancel)
+    def native_untrusted_confirmation(page):
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #remove').click()
+        page.locator('#yt-offline-remove-host #confirm').evaluate('(node)=>node.click()')
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('No fresh user confirmation')
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('programmatic confirmation cannot authorize native removal',native_untrusted_confirmation)
     def native_not_downloaded(page):
         page.evaluate('fixture.downloaded.aaaaaaaaaaa=false')
         page.locator('ytd-playlist-panel-renderer').evaluate('(node)=>node.remove()')

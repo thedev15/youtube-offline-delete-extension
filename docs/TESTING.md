@@ -18,6 +18,7 @@
   preparation, explicit confirmation/Cancel, current-ID checks, native-label
   state transition, non-downloaded target refusal, unverified removal without
   retry/navigation, and non-downloaded next-video refusal. No iframe/new tab.
+  Programmatic confirmation is rejected: MAIN requires a trusted user click.
   The fixture deliberately implements a synthetic renderer lifecycle. It does
   NOT establish that creating/data-binding this renderer works on live YouTube.
 - Chromium uses a real unpacked extension in a fresh temporary browser profile

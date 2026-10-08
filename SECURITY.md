@@ -5,17 +5,33 @@ cookies, signed URLs, real download contents, or private YouTube request capture
 
 Safety invariants:
 
-- Explicit confirmation before any native removal request.
-- Same current video ID and same unique Downloads row revalidated before clicking.
-- Removal action must match a configured exact Downloads-specific label inside a
-  visible native popup opened from that row; no generic global Delete matching.
+- Explicit confirmation before any native removal request. The experimental
+  MAIN-world adapter additionally requires a fresh trusted click in the extension
+  confirmation dialog; a bridge message/programmatic click alone is insufficient.
+- Same current video ID revalidated before clicking. Native path additionally
+  checks the bound control's endpoint ID and removal label immediately before
+  dispatch. Legacy sidebar path checks the same unique row.
+- Native path requires YouTube-generated exact English removal labels; legacy
+  path requires a configured exact label in that row's visible popup. No generic
+  global Delete matching, guessed method arguments or action fields.
 - Missing/ambiguous controls fail closed. No automatic deletion retry.
-- Success requires the target row to disappear; a sent click is not proof.
+- Native path verifies a transition to Download on the clicked and freshly
+  constructed current-ID controls. This is native UI evidence only, not proof
+  of deleted media bytes. Next navigation additionally requires a fresh native
+  downloaded-state indication for the next ID. Legacy path checks target-ID
+  absence from its recognized panel. A sent click/rerender alone is not proof.
 - No private APIs, credential extraction, filesystem deletion, permission expansion,
   analytics or third-party JavaScript dependencies.
 
-YouTube's live DOM is outside this project's control. The present adapter supports
+YouTube's live DOM is outside this project's control. The legacy adapter supports
 `ytd-playlist-panel-renderer`, `ytd-playlist-panel-video-renderer`,
 `ytd-menu-popup-renderer` and `ytd-menu-service-item-renderer`. A future layout may
 need a new adapter. Keep matching narrow and add an offline regression fixture
 before expanding support.
+
+The experimental `ytd-menu-service-item-download-renderer` adapter depends on an
+unverified live component lifecycle outside its normal menu. MAIN-world code and
+open shadow DOM share YouTube's page trust boundary; they are not a security
+boundary against a malicious first-party page. The bridge exposes no additional
+extension privileges, credentials, storage-deletion API or network endpoint.
+Live offline testing with a consented disposable copy is a release gate.

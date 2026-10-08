@@ -9,13 +9,21 @@
   const normalize = value => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
   let prepared = null;
   let removing = false;
+  let consent = null;
   const currentId = () => {
     const url = new URL(location.href);
     const id = url.searchParams.get("v");
     return url.origin === "https://www.youtube.com" && url.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(id || "") ? id : null;
   };
   const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-  function clear() {prepared?.container.remove(); prepared = null;}
+  function clear() {prepared?.container.remove(); prepared = null; consent = null;}
+  document.addEventListener("click", event => {
+    if (!event.isTrusted || !prepared || prepared.id !== currentId()) return;
+    const host = document.getElementById("yt-offline-remove-host");
+    const button = event.composedPath().find(node => node instanceof Element && node.id === "confirm");
+    if (!host?.shadowRoot || button?.getRootNode() !== host.shadowRoot || !button.closest("[role=dialog]")) return;
+    consent = {id: currentId(), expires: Date.now() + 2000};
+  }, true);
   function labels(control) {
     return [...control.querySelectorAll("yt-formatted-string")].map(node => normalize(node.textContent));
   }
@@ -120,6 +128,11 @@
     if (!["probe", "remove"].includes(request.operation)) return;
     const reply = result => window.postMessage({channel: CHANNEL, direction: "response", nonce: request.nonce, videoId: request.videoId, ...result}, location.origin);
     if (removing) {reply({status: "busy", reason: "A native removal request is already active."}); return;}
+    if (request.operation === "remove") {
+      const allowed = consent?.id === request.videoId && consent.expires >= Date.now();
+      consent = null;
+      if (!allowed) {reply({status: "failed", reason: "No fresh user confirmation was observed. No native action was executed."}); return;}
+    }
     removing = true;
     try {reply(await (request.operation === "probe" ? prepare(request.videoId) : remove(request.videoId, request.nextVideoId)));}
     catch {clear(); reply({status: "failed", reason: "Native control preparation or verification failed. No automatic retry or navigation."});}
