@@ -101,11 +101,38 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         page.locator('#yt-offline-remove-host #details').click()
         text=page.locator('#yt-offline-remove-host pre').inner_text()
         report=json.loads(text)
-        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.4','adapterStage':'response-sent'}
+        assert report['nativeBridge']=={'transport':'document-json-event','requestAcknowledged':True,'replyReceived':True,'adapterVersion':'0.1.5','adapterStage':'response-sent'}
+        structure=report['nativeControlStructure']
+        assert structure['bindingMatches'] and structure['removalLabelSeen'] and structure['eligibleNativeClickTarget']
+        assert structure['formattedLabelCount']==1 and structure['nativeClickTargetCount']==1
         for private in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Current video','videoId']:
             assert private not in text
         assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
     case('bridge stage diagnostics show acknowledgement and reply without private identifiers',native_bridge_details)
+    def unsupported_structure(page,mode):
+        page.evaluate('(mode)=>{fixture.nativeRenderMode=mode}',mode)
+        page.locator('ytd-playlist-panel-renderer #header').evaluate('(node)=>node.remove()')
+        page.locator('#yt-offline-remove-host #native-check').click()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('did not pass',timeout=15000)
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        page.locator('#yt-offline-remove-host #details').click()
+        text=page.locator('#yt-offline-remove-host pre').inner_text()
+        report=json.loads(text)
+        assert report['nativeControlStatus']=='unsupported'
+        assert report['nativeBridge']['requestAcknowledged'] and report['nativeBridge']['replyReceived']
+        structure=report['nativeControlStructure']
+        assert structure['bindingMatches'] and structure['nativeClickTargetCount']==0
+        assert not structure['eligibleNativeClickTarget']
+        if mode=='empty':
+            assert structure['directChildCount']==0 and structure['descendantCount']==0
+            assert not structure['removalLabelSeen'] and structure['formattedLabelCount']==0
+        else:
+            assert structure['removalLabelSeen'] and structure['formattedLabelCount']==1
+        for private in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Current video','videoId']:
+            assert private not in text
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('empty native renderer reports structure before cleanup without actions',lambda page:unsupported_structure(page,'empty'))
+    case('native removal label without a click target is diagnosed and never enabled',lambda page:unsupported_structure(page,'no-click-target'))
     def native_bad_request(page):
         result=page.evaluate('''() => new Promise(resolve => {
           const nonce="invalidtarget0123456789";

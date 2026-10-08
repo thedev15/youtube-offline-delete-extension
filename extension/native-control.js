@@ -36,6 +36,31 @@
     const node = outer.length === 1 ? outer[0] : null;
     return node && !node.disabled && node.getAttribute("aria-disabled") !== "true" ? node : null;
   }
+  function snapshot(control, id) {
+    if (!control) return null;
+    const text = labels(control);
+    const nodes = [...control.querySelectorAll("tp-yt-paper-item, button, [role=menuitem]")];
+    const outer = nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
+    const shadowLabels = control.shadowRoot ? [...control.shadowRoot.querySelectorAll("yt-formatted-string")].map(node => normalize(node.textContent)) : [];
+    let bindingMatches = null;
+    try {bindingMatches = sameId(control, id);} catch { /* Record access failure without exception text. */ }
+    return {
+      bindingMatches,
+      connected: control.isConnected,
+      directChildCount: control.children.length,
+      descendantCount: control.querySelectorAll("*").length,
+      formattedLabelCount: text.length,
+      formattedTextPresent: text.some(Boolean),
+      removalLabelSeen: text.some(value => REMOVE.has(value)),
+      downloadLabelSeen: text.some(value => ADD.has(value)),
+      nativeClickTargetCount: outer.length,
+      eligibleNativeClickTarget: Boolean(clickable(control)),
+      openShadowRoot: Boolean(control.shadowRoot),
+      shadowFormattedLabelCount: shadowLabels.length,
+      shadowRemovalLabelSeen: shadowLabels.some(value => REMOVE.has(value)),
+      shadowDownloadLabelSeen: shadowLabels.some(value => ADD.has(value))
+    };
+  }
   const sameId = (control, id) => control.data?.serviceEndpoint?.offlineVideoEndpoint?.videoId === id;
   const offersRemove = control => {
     const text = labels(control);
@@ -68,16 +93,18 @@
     for (let n = 0; n < 24; n++) {
       if (currentId() !== id) {clear(); throw new Error("The player changed during the native-control check.");}
       if (sameId(prepared.control, id) && offersRemove(prepared.control) && clickable(prepared.control)) {
-        return {status: "ready", reason: "Native control generated a download-removal action."};
+        return {status: "ready", reason: "Native control generated a download-removal action.", structure: snapshot(prepared.control, id)};
       }
       if (sameId(prepared.control, id) && offersAdd(prepared.control)) {
+        const structure = snapshot(prepared.control, id);
         clear();
-        return {status: "not-downloaded", reason: "Native control offers Download, not removal. No action was executed."};
+        return {status: "not-downloaded", reason: "Native control offers Download, not removal. No action was executed.", structure};
       }
       await sleep(250);
     }
+    const structure = snapshot(prepared.control, id);
     clear();
-    return {status: "unsupported", reason: "Native control did not generate a supported removal label in this player."};
+    return {status: "unsupported", reason: "Native control preparation did not pass the binding, label and click-target checks. No native action was executed.", structure};
   }
   async function nextDownloaded(id, current) {
     if (!/^[A-Za-z0-9_-]{11}$/.test(id || "") || id === current) return false;
@@ -148,7 +175,11 @@
     removing = true;
     stage(request.operation === "probe" ? "probe-running" : "remove-running");
     try {reply(await (request.operation === "probe" ? prepare(request.videoId) : remove(request.videoId, request.nextVideoId)));}
-    catch {clear(); reply({status: "failed", reason: "Native control preparation or verification failed. No automatic retry or navigation."});}
+    catch {
+      let structure = null;
+      try {structure = snapshot(prepared?.control, request.videoId);} catch { /* No raw errors/values in diagnostics. */ }
+      clear(); reply({status: "failed", reason: "Native control preparation or verification failed. No automatic retry or navigation.", structure});
+    }
     finally {removing = false;}
   }
   document.addEventListener(REQUEST_EVENT, event => {
@@ -164,6 +195,6 @@
   });
   window.addEventListener("pagehide", clear);
   document.addEventListener("yt-navigate-finish", clear);
-  document.documentElement.setAttribute("data-yto-native-version", "0.1.4");
+  document.documentElement.setAttribute("data-yto-native-version", "0.1.5");
   stage("ready");
 })();
