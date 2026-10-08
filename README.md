@@ -2,27 +2,41 @@
 
 A small, dependency-free WebExtension that adds **Remove download** beside the
 video actions below a YouTube watch-page player—the area marked in the requested
-design. It uses **YouTube's own Downloads-sidebar menu**, not private APIs or
-direct deletion of browser storage.
+design. It delegates to **YouTube's own native download control** (experimental)
+or its supported Downloads-sidebar menu. It does not guess private network APIs
+or directly delete browser storage.
 
 **Offline playback limitation:** the live Edge watch-page Downloads sidebar has
 been reported not to expose a native removal control. The current native-menu
 adapter therefore does **not** provide verified offline in-player deletion.
-Version **0.1.2** adds a **read-only “Check offline support”** button to test whether
-the cached Downloads UI can load inside the player page. It opens no tab, does
-not navigate the player, and performs no removal. An embedded view can be blocked
-by YouTube's framing policy or fail to load from cache. This is a feasibility
-check, not an offline-removal fix; synthetic fixtures do not prove live support.
+Version **0.1.3** replaces the embedded-view diagnostic with an experimental
+**Check native control** adapter. It creates YouTube's
+`ytd-menu-service-item-download-renderer` in the player page, supplying only the
+observed `serviceEndpoint.offlineVideoEndpoint.videoId` payload. The check does
+not click it. Removal is enabled only if YouTube itself generates a supported
+English removal label. After explicit confirmation, the adapter delegates to
+the native DOM click handler—never guessed `sendOfflineAction` arguments.
+
+**Live support is not established.** The offline watch page might not register
+this component, or construction/data assignment might not initialize it outside
+the real menu. Those cases must stop without removal. Fixture success does not
+prove YouTube's lifecycle, local-copy deletion or actual next-video playback.
+No helper tab, iframe or Downloads-page navigation is used by v0.1.3.
 
 ## What it does
 
 - Finds the current video by its exact 11-character watch URL ID.
-- Requires its visible row in a sidebar titled **Downloads** and a native menu.
+- Native-control path requires YouTube's component to generate the exact removal
+  state; legacy path requires a visible row in a sidebar titled **Downloads**.
 - Asks for explicit confirmation; Cancel/Escape make no removal request.
-- Opens only that row's menu and clicks an exact Downloads-specific action.
-- Reports success only after the current video's ID is absent from the recognized
-  Downloads panel; a row merely being replaced/re-rendered is not enough. It never
-  automatically retries.
+- Native-control path clicks only the prepared current-video control after
+  confirmation. Legacy path opens only that row's menu and selects its action.
+- Native-control path reports only a **native UI indication** of removal: both
+  the clicked control and a fresh control must offer Download for that same ID.
+  This is not independent verification of deleted media bytes. It advances only
+  if a fresh control also indicates that the next queued video is downloaded.
+  Legacy path checks ID absence from its recognized panel. Neither path retries
+  automatically; a rerender or completed dispatch alone is not success.
 - Plays the next Downloads row after verified removal, without opening Downloads.
   No next row means no navigation; failed removal never skips a video. This can
   be switched off in options (YouTube's own auto-advance is not disabled).
@@ -34,10 +48,17 @@ check, not an offline-removal fix; synthetic fixtures do not prove live support.
   in extension options. Generic `Delete`/`Remove` labels are rejected.
 
 **No Downloads-page navigation is needed when the supported sidebar menu exists.**
-If YouTube omits that menu or changes its layout, the extension disables the button
-or reports that removal cannot be verified. It does not claim to support unknown
+If neither native path is available, the extension disables the button or reports
+that removal cannot be verified. It does not claim to support unknown
 layouts, bypass YouTube Premium, or remove downloads via undocumented endpoints.
 Your actual YouTube account/downloads were not accessed during development.
+
+For a **read-only first test**, update/reload the unpacked v0.1.3 extension,
+refresh YouTube before disconnecting, play an existing local download with the
+network disconnected, and click **Check native control**. Use **Details** to
+report `nativeControlStatus`/`nativeControlReason`. Do not confirm removal until
+you have chosen a disposable download. Then independently check its absence in
+Downloads and verify that the next video really plays with the network still off.
 
 ## Browser compatibility — honest boundaries
 
@@ -97,29 +118,29 @@ extension certification.
 
 **Updating an unpacked Edge installation:** replace your existing unpacked folder
 with the current Chromium build, then open `edge://extensions`, click **Reload**
-on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.2**
+on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.3**
 on the extension's details page. Updating repository files alone does not update
 an already-installed local copy.
 
 Do not add generic destructive labels or attempt to force unsupported controls.
 See [privacy](docs/PRIVACY.md) and [security](SECURITY.md).
 
-### Read-only offline feasibility check (0.1.2)
+### Read-only native-control check (0.1.3)
 
 1. Keep a downloaded video open in the player and disconnect from the internet.
-2. Click **Check offline support**. A non-interactive embedded Downloads view
-   appears inside the current page; the extension creates no helper tab.
-3. Wait up to 15 seconds and copy the report. It exposes only capability flags,
-   counts and element types, not video identifiers, titles, URLs or account data.
-4. Close the check. No native removal action is clicked and playback is not
-   advanced. A successful structure check is not proof of successful deletion or
-   next-video offline playback. Those need a separate live, explicitly confirmed
-   test after an adapter is implemented.
+2. Click **Check native control**. The extension prepares a native renderer in
+   the current page without clicking it. No embedded Downloads view or tab.
+3. Select **Details** and copy the report. It exposes native-control status,
+   capability counts and element types, not video IDs/titles or account data.
+4. Unsupported/not-downloaded means stop: do not force removal. Ready means
+   YouTube generated a removal label, not that deletion has already been proven.
+5. Only if you consent to removing this particular disposable download, select
+   **Remove download** and confirm. Independently verify disappearance from
+   Downloads and next-video playback while the real network remains disconnected.
 
-`browserReportsOnline` reflects the browser's connectivity hint, not proof that
-the internet is unreachable. Disconnect the real network for a meaningful test.
-The extension only reads the embedded DOM; YouTube manages its own page/cache
-behavior. It does not bypass a framing block or access private storage schemas.
+Disconnect the real network for a meaningful test. YouTube manages its own
+renderer/storage behavior. The adapter checks native labels, not private storage
+schemas or actual media bytes. The v0.1.2 iframe probe is no longer packaged.
 
 ## Tests
 

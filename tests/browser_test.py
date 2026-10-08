@@ -40,7 +40,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         context=browser.new_context(viewport={'width':1440,'height':900})
         context.add_init_script('window.browser={storage:{sync:{get:async()=>({}),set:async()=>{}},onChanged:{addListener:()=>{}}}};\n'+
             (ROOT/'extension/shared.js').read_text()+"\ndocument.addEventListener('DOMContentLoaded', () => {\n"+
-            (ROOT/'extension/content.js').read_text()+"\n"+(ROOT/'extension/offline-check.js').read_text()+"\n});")
+            (ROOT/'extension/native-control.js').read_text()+"\n"+(ROOT/'extension/content.js').read_text()+"\n});")
     # The only navigated URL is intercepted. No live account or video is involved.
     context.route('https://www.youtube.com/**',lambda route:route.fulfill(status=200,content_type='text/html',body=downloads_fixture if '/feed/downloads' in route.request.url else fixture))
     context.set_default_timeout(10000)
@@ -72,45 +72,85 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         assert page.locator('ytd-watch-metadata #actions #yt-offline-remove-host').count()==1
         page.screenshot(path=str(out/'placement.png'))
     case('button in video action row',placement)
-    def offline_probe(page):
-        original_url=page.url
-        original_page_count=len(context.pages)
+    def prepare_native(page):
+        page.locator('ytd-playlist-panel-renderer #header').evaluate('(node)=>node.remove()')
+        page.locator('[data-video-id="aaaaaaaaaaa"] ytd-menu-renderer').evaluate('(node)=>node.remove()')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        page.locator('#yt-offline-remove-host #native-check').click()
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_enabled()
+    def native_positive(page):
+        count=len(context.pages)
         context.set_offline(True)
         try:
-            page.locator('#yt-offline-remove-host #offline-check').click()
-            expect(page.locator('#yt-offline-remove-host pre')).to_contain_text('Cached view structure detected')
-            report=json.loads(page.locator('#yt-offline-remove-host pre').inner_text())
-            assert report['browserReportsOnline'] is False
-            assert report['downloadsRouteLoaded'] and report['matchingCardCount']==1
-            assert 'button' in report['matchingCardMenuElementTypes']
-            text=json.dumps(report)
-            for private_value in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Private fixture video title']:
-                assert private_value not in text
-            assert page.url==original_url and len(context.pages)==original_page_count
-            assert page.evaluate('fixture.removed===0 && fixture.opened===0 && fixture.navigated===0')
-            assert len(page.frames)==2
-            expect(page.locator('#yt-offline-remove-host iframe')).to_have_attribute('sandbox','allow-scripts allow-same-origin')
-            expect(page.locator('#yt-offline-remove-host iframe')).to_have_attribute('inert','')
-            page.locator('#yt-offline-remove-host #offline-close').click()
-            expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
+            prepare_native(page)
+            assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+            click_confirm(page)
+            expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
+            assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===1')
+            assert len(context.pages)==count and len(page.frames)==1
+            assert page.evaluate('fixture.downloaded.aaaaaaaaaaa===false && fixture.downloaded.bbbbbbbbbbb===true')
         finally:
             context.set_offline(False)
-    case('read-only in-page offline probe opens no tab, makes no deletion and hides private values',offline_probe)
-    def cancelled_probe(page):
-        page.locator('#yt-offline-remove-host #offline-check').click()
-        page.evaluate("history.pushState({},'', '/watch?v=bbbbbbbbbbb');document.dispatchEvent(new Event('yt-navigate-finish'))")
-        expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
-        assert page.evaluate('fixture.removed===0 && fixture.opened===0')
-    case('navigation cancels read-only probe and removes its embedded view',cancelled_probe)
-    def unsupported_probe(page):
-        page.route('https://www.youtube.com/feed/downloads',lambda route:route.fulfill(status=200,content_type='text/html',body='<html><body>Unavailable offline</body></html>'))
-        page.locator('#yt-offline-remove-host #offline-check').click()
-        expect(page.locator('#yt-offline-remove-host pre')).to_contain_text('unavailable or unsupported',timeout=20000)
-        assert page.evaluate('fixture.removed===0 && fixture.opened===0 && fixture.navigated===0')
+    case('native adapter removes once and advances offline fixture without sidebar menu, frame or new tab',native_positive)
+    def native_cancel(page):
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #remove').click()
+        page.locator('#yt-offline-remove-host #cancel').click()
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+    case('native confirmation Cancel never invokes native action',native_cancel)
+    def native_not_downloaded(page):
+        page.evaluate('fixture.downloaded.aaaaaaaaaaa=false')
+        page.locator('ytd-playlist-panel-renderer').evaluate('(node)=>node.remove()')
+        page.locator('#yt-offline-remove-host #native-check').click()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('offers Download, not removal')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+    case('native adapter never clicks an Add Download control',native_not_downloaded)
+    def native_unverified(page):
+        page.evaluate('fixture.nativeWorks=false')
+        prepare_native(page)
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('could not be verified',timeout=15000)
         expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
-        page.keyboard.press('Escape')
-        expect(page.locator('#yt-offline-remove-host iframe')).to_have_count(0)
-    case('unsupported embedded Downloads view never deletes or navigates',unsupported_probe)
+        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('unverified native removal is not retried and never advances',native_unverified)
+    def native_next_missing(page):
+        page.evaluate('fixture.downloaded.bbbbbbbbbbb=false')
+        prepare_native(page)
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text("Next video's downloaded state was not verified")
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('native adapter never advances to a non-downloaded next video',native_next_missing)
+    def native_changed_endpoint(page):
+        prepare_native(page)
+        page.evaluate('document.querySelector("ytd-menu-service-item-download-renderer").data={serviceEndpoint:{offlineVideoEndpoint:{videoId:"bbbbbbbbbbb"}}}')
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('failed')
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('native adapter rejects a changed endpoint before destructive click',native_changed_endpoint)
+    def native_changed_state(page):
+        prepare_native(page)
+        page.evaluate('fixture.downloaded.aaaaaaaaaaa=false;document.querySelectorAll("ytd-menu-service-item-download-renderer").forEach(node=>node.refresh())')
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('failed')
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('native adapter rechecks removal label immediately before click',native_changed_state)
+    def native_last(page):
+        page.locator('[data-video-id="bbbbbbbbbbb"]').evaluate('(node)=>node.remove()')
+        prepare_native(page)
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('Native UI indicates removal')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.nativeRequests===1 && fixture.nativeAdds===0 && fixture.navigated===0')
+    case('native last download stays on the same page',native_last)
+    def native_stale_dialog(page):
+        prepare_native(page)
+        page.locator('#yt-offline-remove-host #remove').click()
+        page.evaluate('history.pushState({},"","/watch?v=bbbbbbbbbbb");document.dispatchEvent(new Event("yt-navigate-finish"))')
+        expect(page.locator('#yt-offline-remove-host [role=dialog]')).to_have_count(0)
+        assert page.evaluate('fixture.nativeRequests===0 && fixture.nativeAdds===0')
+    case('native stale confirmation is cancelled on navigation',native_stale_dialog)
     def cancel(page):
         page.locator('#yt-offline-remove-host #remove').click()
         page.locator('#yt-offline-remove-host #cancel').click()

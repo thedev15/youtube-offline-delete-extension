@@ -9,7 +9,7 @@ import zipfile
 import zlib
 
 ROOT = Path(__file__).resolve().parents[1]
-FILES = ['shared.js', 'content.js', 'offline-check.js', 'options.html', 'options.css', 'options.js']
+FILES = ['shared.js', 'content.js', 'native-control.js', 'options.html', 'options.css', 'options.js']
 
 def icon(size):
     rows = bytearray()

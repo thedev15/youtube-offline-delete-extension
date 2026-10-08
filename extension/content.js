@@ -13,6 +13,35 @@
   let modal = null;
   let route = location.href;
   let notice = "";
+  let nativeState = {status: "unchecked", reason: "Native control has not been checked."};
+  let probing = false;
+  const CHANNEL = "yt-offline-native-control-v1";
+  function nativeRequest(operation, id, nextId = null) {
+    const nonce = crypto.randomUUID().replaceAll("-", "");
+    return new Promise((resolve, reject) => {
+      const listener = event => {
+        const data = event.data;
+        if (event.source !== window || event.origin !== location.origin || data?.channel !== CHANNEL || data.direction !== "response" || data.nonce !== nonce || data.videoId !== id) return;
+        clearTimeout(timer); window.removeEventListener("message", listener); resolve(data);
+      };
+      const timer = setTimeout(() => {window.removeEventListener("message", listener); reject(new Error("The native-control adapter did not respond. No automatic retry or navigation."));}, 15000);
+      window.addEventListener("message", listener);
+      window.postMessage({channel: CHANNEL, direction: "request", nonce, operation, videoId: id, nextVideoId: nextId}, location.origin);
+    });
+  }
+  async function checkNative() {
+    const id = videoId(location.href);
+    if (!id || busy || probing || modal) return;
+    probing = true;
+    notice = "";
+    nativeState = {status: "checking", reason: "Checking YouTube's native download control without clicking it…"};
+    update();
+    try {
+      const result = await nativeRequest("probe", id);
+      if (videoId(location.href) === id) nativeState = result;
+    } catch (error) {if (videoId(location.href) === id) nativeState = {status: "failed", reason: error.message};}
+    finally {probing = false; update();}
+  }
   const host = document.createElement("div");
   host.id = "yt-offline-remove-host";
   host.style.cssText = "display:inline-flex;align-items:center;margin-inline:8px;max-width:100%;";
@@ -30,7 +59,7 @@
     @media(max-width:700px){.status{max-width:160px}.dialog{padding:18px}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
     @media(forced-colors:active){button{border:1px solid ButtonText}.danger{background:ButtonFace;color:ButtonText}}
-  </style><button id="remove" type="button" aria-describedby="status">Remove download</button><button id="details" type="button" aria-label="Show privacy-safe removal diagnostics">Details</button><span id="status" class="status" role="status" aria-live="polite"></span>`;
+  </style><button id="remove" type="button" aria-describedby="status">Remove download</button><button id="native-check" type="button">Check native control</button><button id="details" type="button" aria-label="Show privacy-safe removal diagnostics">Details</button><span id="status" class="status" role="status" aria-live="polite"></span>`;
   const button = shadow.getElementById("remove");
   const status = shadow.getElementById("status");
 
@@ -60,6 +89,11 @@
   function inspection() {
     const id = videoId(location.href);
     if (!id) return {reason: "Not a supported watch page", found: null};
+    if (nativeState.status === "ready") {
+      const rows = [...document.querySelectorAll(ROW_SELECTOR)].filter(row => visible(row) && rowLink(row, id));
+      if (rows.length > 1) return {reason: "Multiple playback rows match the current video", found: null};
+      return {reason: "Experimental native download control is ready", found: {id, native: true, row: rows[0] || null, panel: rows[0]?.closest(PANEL_SELECTOR) || null}};
+    }
     const panels = downloadPanels();
     if (!panels.length) return {reason: "Downloads sidebar title/layout not recognized", found: null};
     const rows = panels.flatMap(panel => [...panel.querySelectorAll(ROW_SELECTOR)]).filter(row => visible(row) && rowLink(row, id));
@@ -78,6 +112,7 @@
   }
   function target() {return inspection().found;}
   function nextVideo(found) {
+    if (!found.panel || !found.row) return null;
     const rows = [...found.panel.querySelectorAll(ROW_SELECTOR)];
     const index = rows.indexOf(found.row);
     for (const row of rows.slice(index + 1)) {
@@ -97,7 +132,9 @@
       visiblePanelCount: panels.filter(visible).length, recognizedDownloadsPanelCount: downloadPanels().length,
       rowCount: rows.length, matchingCurrentRowCount: currentRows.length,
       matchingRowMenuElementTags: [...new Set(menuTags)], language: /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(document.documentElement.lang) ? document.documentElement.lang : "unknown",
-      nextAfterRemoval: settings.advanceAfterRemoval};
+      nextAfterRemoval: settings.advanceAfterRemoval,
+      nativeControlStatus: nativeState.status,
+      nativeControlReason: nativeState.reason};
   }
   function showDetails() {
     if (modal || busy) return;
@@ -129,6 +166,7 @@
     if (route !== location.href) {
       route = location.href;
       notice = "";
+      nativeState = {status: "unchecked", reason: "Native control must be checked for the new video."};
       closeModal();
     }
     const id = videoId(location.href);
@@ -138,12 +176,13 @@
     mount();
     const inspected = inspection();
     const found = inspected.found;
-    button.disabled = busy || !found;
+    button.disabled = busy || probing || !found;
+    shadow.getElementById("native-check").disabled = busy || probing;
     button.textContent = busy ? "Removing…" : "Remove download";
     const help = found ? "Remove this video's offline copy using YouTube's menu." : inspected.reason + ". Select Details for diagnostics.";
     button.title = help;
     button.setAttribute("aria-label", found ? "Remove current video from YouTube Downloads" : "Remove download unavailable: " + help);
-    const text = notice || (found ? "" : inspected.reason);
+    const text = notice || (nativeState.status !== "unchecked" && nativeState.status !== "ready" ? nativeState.reason : (found ? "" : inspected.reason));
     if (status.textContent !== text) status.textContent = text;
   }
   function schedule() {
@@ -169,7 +208,8 @@
       <div class="buttons"><button id="cancel" type="button">Cancel</button><button id="confirm" class="danger" type="button">Remove download</button></div>
     </section>`;
     shadow.append(overlay);
-    if (settings.advanceAfterRemoval) overlay.querySelector("#confirm-help").append(" After verified removal, play the next Downloads video if one is available.");
+    if (found.native) overlay.querySelector("#confirm-help").textContent = "Experimental: ask YouTube's native download control to remove this local copy, without opening Downloads or another tab. No direct database deletion is used. Native UI state—not stored media bytes—is used to check the result.";
+    if (settings.advanceAfterRemoval) overlay.querySelector("#confirm-help").append(" Play next only after removal and the next video's native downloaded state are verified.");
     modal = {element: overlay, id: found.id};
     const cancel = overlay.querySelector("#cancel");
     const confirm = overlay.querySelector("#confirm");
@@ -216,7 +256,27 @@
     });
   }
   const menuSelector = "ytd-menu-popup-renderer";
+  async function removeNative(found) {
+    if (busy) return;
+    busy = true;
+    notice = "";
+    const next = settings.advanceAfterRemoval ? nextVideo(found) : null;
+    update();
+    try {
+      const result = await nativeRequest("remove", found.id, next?.id);
+      if (videoId(location.href) !== found.id) throw new Error("Player changed; no next-video navigation attempted.");
+      nativeState = {status: "unchecked", reason: "Check the native control again before another removal."};
+      notice = result.reason;
+      if (result.status === "removed" && next && result.nextDownloaded === true) {
+        const live = [...document.querySelectorAll(ROW_SELECTOR)].map(row => rowLink(row, next.id)).filter(Boolean);
+        if (live.length === 1 && videoId(live[0].href) === next.id) live[0].click();
+        else notice += " Next link changed; playback was not advanced.";
+      } else if (result.status === "removed" && next) notice += " Next video's downloaded state was not verified; playback was not advanced.";
+    } catch (error) {notice = error.message; nativeState = {status: "unchecked", reason: "Check native control again."};}
+    finally {busy = false; update();}
+  }
   async function remove(found) {
+    if (found.native) return removeNative(found);
     if (busy) return;
     busy = true;
     notice = "";
@@ -230,7 +290,7 @@
         if (videoId(location.href) !== expectedId || !found.row.isConnected) throw new Error("The video changed. Nothing was removed.");
         const labels = settings.removeLabels.map(normalize);
         const matches = [...document.querySelectorAll(menuSelector)].filter(visible)
-          .flatMap(menu => [...menu.querySelectorAll("ytd-menu-service-item-renderer, yt-list-item-view-model")])
+          .flatMap(menu => [...menu.querySelectorAll("ytd-menu-service-item-renderer, ytd-menu-service-item-download-renderer, yt-list-item-view-model")])
           .filter(node => visible(node) && labels.includes(normalize((node.querySelector("yt-formatted-string, .yt-list-item-view-model__title") || node).textContent)));
         if (matches.length > 1) throw new Error("Ambiguous removal controls. Nothing was removed.");
         return matches[0];
@@ -263,9 +323,13 @@
   }
   button.addEventListener("click", () => {const found = target(); if (found) askConfirmation(found);});
   shadow.getElementById("details").addEventListener("click", showDetails);
+  shadow.getElementById("native-check").addEventListener("click", checkNative);
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, {subtree: true, childList: true});
-  document.addEventListener("yt-navigate-finish", schedule);
+  document.addEventListener("yt-navigate-finish", () => {
+    nativeState = {status: "unchecked", reason: "Check the native control again after navigation."};
+    schedule();
+  });
   window.addEventListener("popstate", schedule);
   let lastReason = "";
   const periodic = () => {
@@ -273,7 +337,10 @@
     if (route !== location.href || reason !== lastReason) {lastReason = reason; schedule();}
   };
   let routeTimer = setInterval(periodic, 750);
-  window.addEventListener("pagehide", () => {observer.disconnect(); clearInterval(routeTimer); closeModal();});
+  window.addEventListener("pagehide", () => {
+    nativeState = {status: "unchecked", reason: "Check the native control again after returning to this page."};
+    observer.disconnect(); clearInterval(routeTimer); closeModal();
+  });
   window.addEventListener("pageshow", event => {
     if (event.persisted) {
       observer.observe(document.documentElement, {subtree: true, childList: true});

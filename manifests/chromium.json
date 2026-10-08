@@ -1,12 +1,17 @@
 {
   "manifest_version": 3,
   "name": "YouTube Offline Remove",
-  "version": "0.1.2",
-  "description": "Confirm and remove the current offline video through YouTube's Downloads sidebar menu.",
+  "version": "0.1.3",
+  "description": "Experimental confirmed offline removal through YouTube's native download control or Downloads sidebar menu.",
   "permissions": ["storage"],
   "content_scripts": [{
     "matches": ["https://www.youtube.com/*"],
-    "js": ["shared.js", "content.js", "offline-check.js"],
+    "js": ["native-control.js"],
+    "world": "MAIN",
+    "run_at": "document_idle"
+  }, {
+    "matches": ["https://www.youtube.com/*"],
+    "js": ["shared.js", "content.js"],
     "run_at": "document_idle"
   }],
   "options_ui": {"page": "options.html", "open_in_tab": true},

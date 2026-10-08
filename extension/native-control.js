@@ -1,0 +1,130 @@
+/* MAIN-world adapter: delegate to YouTube's own control, never guessed API calls. */
+(() => {
+  "use strict";
+  if (window.top !== window) return;
+  const CHANNEL = "yt-offline-native-control-v1";
+  const TAG = "ytd-menu-service-item-download-renderer";
+  const REMOVE = new Set(["remove from downloads", "delete from downloads", "remove download", "delete download"]);
+  const ADD = new Set(["download", "download video"]);
+  const normalize = value => String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  let prepared = null;
+  let removing = false;
+  const currentId = () => {
+    const url = new URL(location.href);
+    const id = url.searchParams.get("v");
+    return url.origin === "https://www.youtube.com" && url.pathname === "/watch" && /^[A-Za-z0-9_-]{11}$/.test(id || "") ? id : null;
+  };
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  function clear() {prepared?.container.remove(); prepared = null;}
+  function labels(control) {
+    return [...control.querySelectorAll("yt-formatted-string")].map(node => normalize(node.textContent));
+  }
+  function clickable(control) {
+    const nodes = [...control.querySelectorAll("tp-yt-paper-item, button, [role=menuitem]")];
+    const outer = nodes.filter(node => !nodes.some(other => other !== node && other.contains(node)));
+    const node = outer.length === 1 ? outer[0] : null;
+    return node && !node.disabled && node.getAttribute("aria-disabled") !== "true" ? node : null;
+  }
+  const sameId = (control, id) => control.data?.serviceEndpoint?.offlineVideoEndpoint?.videoId === id;
+  const offersRemove = control => {
+    const text = labels(control);
+    return text.some(value => REMOVE.has(value)) && !text.some(value => ADD.has(value));
+  };
+  const offersAdd = control => {
+    const text = labels(control);
+    return text.some(value => ADD.has(value)) && !text.some(value => REMOVE.has(value));
+  };
+  function construct(id) {
+    const container = document.createElement("div");
+    container.setAttribute("aria-hidden", "true");
+    container.style.cssText = "position:fixed;left:-10000px;top:0;width:320px;opacity:0;pointer-events:none;";
+    const control = document.createElement(TAG);
+    container.append(control);
+    (document.querySelector("ytd-app") || document.body).append(container);
+    // Exactly the field observed on the real native menu. No action, params or label invented.
+    try {control.data = {serviceEndpoint: {offlineVideoEndpoint: {videoId: id}}};}
+    catch (error) {container.remove(); throw error;}
+    return {id, container, control};
+  }
+  async function prepare(id) {
+    clear();
+    for (let n = 0; n < 16 && !customElements.get(TAG); n++) {
+      if (currentId() !== id) throw new Error("The player changed during the native-control check.");
+      await sleep(250);
+    }
+    if (!customElements.get(TAG)) return {status: "unsupported", reason: "YouTube's download control is not registered in this player."};
+    prepared = construct(id);
+    for (let n = 0; n < 24; n++) {
+      if (currentId() !== id) {clear(); throw new Error("The player changed during the native-control check.");}
+      if (sameId(prepared.control, id) && offersRemove(prepared.control) && clickable(prepared.control)) {
+        return {status: "ready", reason: "Native control generated a download-removal action."};
+      }
+      if (sameId(prepared.control, id) && offersAdd(prepared.control)) {
+        clear();
+        return {status: "not-downloaded", reason: "Native control offers Download, not removal. No action was executed."};
+      }
+      await sleep(250);
+    }
+    clear();
+    return {status: "unsupported", reason: "Native control did not generate a supported removal label in this player."};
+  }
+  async function nextDownloaded(id, current) {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(id || "") || id === current) return false;
+    const next = construct(id);
+    try {
+      for (let n = 0; n < 12; n++) {
+        if (currentId() !== current) return false;
+        if (!sameId(next.control, id)) return false;
+        if (offersAdd(next.control)) return false;
+        if (offersRemove(next.control) && clickable(next.control)) {
+          await sleep(250);
+          return currentId() === current && sameId(next.control, id) && offersRemove(next.control);
+        }
+        await sleep(250);
+      }
+      return false;
+    } finally {next.container.remove();}
+  }
+  async function remove(id, nextId) {
+    if (!prepared || prepared.id !== id || currentId() !== id) throw new Error("The prepared native control or player changed. No action was executed.");
+    const original = prepared;
+    const target = clickable(original.control);
+    if (!original.container.isConnected || !sameId(original.control, id) || !target || !offersRemove(original.control)) {
+      throw new Error("Native control no longer offers removal. No action was executed.");
+    }
+    // Delegate to the native DOM event handler; never invoke unknown proxy methods.
+    target.click();
+    let confirm = null;
+    const deadline = Date.now() + 8000;
+    try {
+      while (Date.now() < deadline) {
+        if (currentId() !== id) throw new Error("Player changed; native removal could not be verified.");
+        if (sameId(original.control, id) && offersAdd(original.control)) {
+          if (!confirm) confirm = construct(id);
+          if (sameId(confirm.control, id) && offersAdd(confirm.control)) {
+            await sleep(500);
+            if (currentId() === id && sameId(original.control, id) && sameId(confirm.control, id) && offersAdd(original.control) && offersAdd(confirm.control)) {
+              return {status: "removed", reason: "Native UI indicates removal: two controls now offer Download.", nextDownloaded: await nextDownloaded(nextId, id)};
+            }
+          }
+        }
+        await sleep(250);
+      }
+      return {status: "unverified", reason: "Native removal was requested once, but the native UI state change could not be verified. No retry or next-video navigation."};
+    } finally {confirm?.container.remove(); clear();}
+  }
+  window.addEventListener("message", async event => {
+    const request = event.data;
+    if (event.source !== window || event.origin !== location.origin || request?.channel !== CHANNEL || request.direction !== "request") return;
+    if (!/^[A-Za-z0-9_-]{16,80}$/.test(request.nonce || "") || request.videoId !== currentId()) return;
+    if (!["probe", "remove"].includes(request.operation)) return;
+    const reply = result => window.postMessage({channel: CHANNEL, direction: "response", nonce: request.nonce, videoId: request.videoId, ...result}, location.origin);
+    if (removing) {reply({status: "busy", reason: "A native removal request is already active."}); return;}
+    removing = true;
+    try {reply(await (request.operation === "probe" ? prepare(request.videoId) : remove(request.videoId, request.nextVideoId)));}
+    catch {clear(); reply({status: "failed", reason: "Native control preparation or verification failed. No automatic retry or navigation."});}
+    finally {removing = false;}
+  });
+  window.addEventListener("pagehide", clear);
+  document.addEventListener("yt-navigate-finish", clear);
+})();

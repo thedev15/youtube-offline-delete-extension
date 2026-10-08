@@ -3,9 +3,9 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>YouTube Offline Remove — settings</title><link rel="stylesheet" href="options.css"></head>
 <body><main>
   <h1>YouTube Offline Remove</h1>
-  <p>Removal requires the current video's row in the Downloads sidebar and YouTube's own removal menu. No download-page navigation, private APIs, or download bypasses are used.</p>
-  <p><strong>Offline limitation:</strong> a player layout without a native removal menu is not supported by the current removal adapter. “Check offline support” is read-only: it tests an embedded cached Downloads view, opens no tab and does not delete anything.</p>
-  <p>English labels are supported by default. For another YouTube language, enter the <strong>exact displayed labels</strong> below, one per line. Matching ignores case and extra spaces. Do not add generic labels such as “Delete” or “Remove”: they could identify an unrelated action.</p>
+  <p>Removal delegates to YouTube's native control or a supported Downloads-sidebar menu. No helper tab, iframe, download-page navigation, guessed API calls or direct storage deletion.</p>
+  <p><strong>Experimental offline adapter:</strong> “Check native control” prepares YouTube's own renderer without clicking it. If the native removal label is unavailable, stop. Live offline deletion and next playback still need verification with a disposable download you explicitly confirm removing. Native labels are UI evidence, not proof of deleted media bytes.</p>
+  <p>The experimental native-control adapter currently recognizes English labels only. The fields below configure the legacy sidebar-menu adapter. For another YouTube language, enter the <strong>exact displayed labels</strong>, one per line. Matching ignores case and extra spaces. Do not add generic “Delete” or “Remove” labels.</p>
   <form id="settings">
     <label for="panels">Downloads sidebar titles</label><textarea id="panels" rows="4" maxlength="1200" required></textarea>
     <label for="labels">Native removal action labels</label><textarea id="labels" rows="5" maxlength="1200" required></textarea>
