@@ -93,7 +93,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
             context.set_offline(False)
     case('native adapter removes once and advances offline fixture without sidebar menu, frame or new tab',native_positive)
     def native_message_interference(page):
-        page.evaluate('window.addEventListener("message",event=>event.stopImmediatePropagation(),true);window.postMessage=()=>{throw new Error("Fixture blocked postMessage")};')
+        page.evaluate('() => {window.addEventListener("message",event=>event.stopImmediatePropagation(),true);window.postMessage=()=>{throw new Error("Fixture blocked postMessage")};}')
         native_positive(page)
     case('document bridge works when window message delivery is blocked',native_message_interference)
     def native_bridge_details(page):
