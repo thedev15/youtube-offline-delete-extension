@@ -23,6 +23,12 @@ test('defaults are validated and arrays capped/deduplicated', () => {
 test('storage degrades safely without an extension API', async () => {
   assert.equal(JSON.stringify(await api.storage('get','key')), '{}');
 });
+test('next-video preference defaults on and accepts only booleans', () => {
+  assert.equal(api.sanitizeSettings().advanceAfterRemoval, true);
+  assert.equal(api.sanitizeSettings({advanceAfterRemoval:false}).advanceAfterRemoval, false);
+  assert.equal(api.sanitizeSettings({advanceAfterRemoval:'false'}).advanceAfterRemoval, true);
+  assert.equal(api.sanitizeSettings({advanceAfterRemoval:[]}).advanceAfterRemoval, true);
+});
 test('generic destructive labels cannot enter settings through sync storage', () => {
   const settings=api.sanitizeSettings({removeLabels:['Delete','REMOVE','Remove from downloads']});
   assert.equal(settings.removeLabels.length,1);

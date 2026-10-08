@@ -5,11 +5,15 @@
 - Node built-in tests: URL/origin constraints, label normalization and bounds,
   generic destructive-label rejection, callback/Promise storage, storage errors,
   and minimum-permission manifests.
-- Fifteen DOM scenarios per browser engine: action-row placement; Cancel; exact
+- Twenty-three DOM scenarios per browser engine: action-row placement; Cancel; exact
   confirmed removal; focus trap/Escape; SPA routing; stale confirmation; missing
   sidebar; unrelated playlist; duplicate rows; generic/ambiguous native actions;
   unverified removal with no retry; row disappearance during confirmation;
-  non-watch URLs; narrow viewport dialog.
+  non-watch URLs; narrow viewport dialog; privacy-safe disabled-state diagnostics;
+  class-based Downloads heading; missing native menu; icon/button wrappers;
+  modern list-item action; no duplicate native auto-advance; last-download behavior;
+  re-rendered row not mistaken for deletion. Verified removal tests also check
+  next-video navigation, while failure tests check that no next-video click occurs.
 - Chromium uses a real unpacked extension in a fresh temporary browser profile
   under `test-results/`. Firefox/WebKit tests inject the exact scripts with a
   mock extension-storage interface; this validates DOM code, not addon APIs/loading.
@@ -27,7 +31,10 @@ Using a disposable download you explicitly consent to removing:
 3. Verify placement beside the video action row, including zoom and light/dark mode.
 4. Confirm the button is enabled only for the current video's supported native menu.
 5. Cancel: offline copy remains. Confirm: the correct copy disappears, another
-   downloaded video remains, and no visit to `/feed/downloads` occurs.
+   downloaded video remains, the next Downloads video plays when available, and
+   no visit to `/feed/downloads` occurs. Test the last download and the options
+   toggle: extension auto-advance must stop when disabled, without attempting to
+   suppress YouTube's own behavior.
 6. Test SPA next/previous videos, focus, keyboard, and browser back/forward cache.
 7. Test actual YouTube errors and any native secondary confirmation: the extension
    must not claim success or retry if row removal isn't observed.
@@ -36,6 +43,9 @@ Using a disposable download you explicitly consent to removing:
 10. Safari: use macOS conversion/build, enable permissions, and test the actual addon.
 11. Check the browser's native YouTube download availability; unsupported browsers
     cannot gain native offline support from this extension.
+12. Edge: verify version 0.1.1 after reloading the unpacked extension and refreshing
+    YouTube. A disabled button must explain the condition and offer Details; its
+    report must not contain account information, video IDs/titles or URLs.
 
 This initial version is a reviewed/tested **preview**, not a claim that every
 YouTube deployment has matching menu renderers. Unsupported layouts need a new

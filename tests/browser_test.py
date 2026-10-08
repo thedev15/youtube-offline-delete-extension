@@ -75,11 +75,70 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
     case('Cancel never opens menu or removes',cancel)
     def positive(page):
         click_confirm(page)
-        expect(page.locator('#yt-offline-remove-host #status')).to_have_text('Removed from Downloads.')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
         assert page.evaluate('fixture.opened===1 && fixture.removed===1 && fixture.wrong===0')
+        assert page.evaluate('fixture.navigated===1')
         assert page.locator('[data-video-id="bbbbbbbbbbb"]').count()==1
         assert page.locator('[data-video-id="aaaaaaaaaaa"]').count()==0
-    case('confirmed native removal affects only current video',positive)
+    case('verified removal affects only current video then plays next',positive)
+    def disabled_details(page):
+        page.locator('ytd-playlist-panel-renderer #header').evaluate('(node)=>node.remove()')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('title/layout not recognized')
+        page.locator('#yt-offline-remove-host #details').click()
+        report=json.loads(page.locator('#yt-offline-remove-host pre').inner_text())
+        assert report['panelCount']==1 and report['recognizedDownloadsPanelCount']==0
+        assert report['matchingCurrentRowCount']==1
+        text=json.dumps(report)
+        for private_value in ['aaaaaaaaaaa','bbbbbbbbbbb','youtube.com','Current video']:
+            assert private_value not in text
+        page.keyboard.press('Tab')
+        expect(page.locator('#yt-offline-remove-host pre')).to_be_focused()
+        page.keyboard.press('Escape')
+        expect(page.locator('#yt-offline-remove-host #details')).to_be_focused()
+        assert page.evaluate('fixture.opened===0 && fixture.removed===0 && fixture.navigated===0')
+    case('disabled button provides privacy-safe diagnostics without action',disabled_details)
+    def class_heading(page):
+        page.locator('ytd-playlist-panel-renderer #header').evaluate('(node)=>node.innerHTML="<div class=title>Downloads</div>"')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_enabled()
+        positive(page)
+    case('Downloads class-based heading is recognized',class_heading)
+    def inaccessible_menu(page):
+        page.locator('[data-video-id="aaaaaaaaaaa"] ytd-menu-renderer').evaluate('(node)=>node.remove()')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_disabled()
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('no native menu')
+        assert page.evaluate('fixture.opened===0 && fixture.removed===0')
+    case('missing native menu explains disabled state without unsafe fallback',inaccessible_menu)
+    def wrapper_menu(page):
+        page.locator('[data-video-id="aaaaaaaaaaa"] ytd-menu-renderer button').evaluate('(node)=>{const wrapper=document.createElement("yt-icon-button");node.replaceWith(wrapper);wrapper.append(node);}')
+        expect(page.locator('#yt-offline-remove-host #remove')).to_be_enabled()
+        positive(page)
+    case('native icon wrapper and inner button are counted only once',wrapper_menu)
+    def modern_menu(page):
+        page.evaluate('fixture.menuTag="yt-list-item-view-model"')
+        positive(page)
+    case('exact Downloads action on modern list-item renderer',modern_menu)
+    def native_advance(page):
+        page.evaluate('fixture.autoAdvance=true')
+        click_confirm(page)
+        expect(page).to_have_url('https://www.youtube.com/watch?v=bbbbbbbbbbb')
+        expect(page.locator('[data-video-id="aaaaaaaaaaa"]')).to_have_count(0)
+        assert page.evaluate('fixture.removed===1 && fixture.navigated===0')
+    case('native next-video advance is not repeated',native_advance)
+    def no_next(page):
+        page.locator('[data-video-id="bbbbbbbbbbb"]').evaluate('(row)=>row.remove()')
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_have_text('Removed from Downloads.')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.removed===1 && fixture.navigated===0')
+    case('last download stays on page without wrapping',no_next)
+    def rerender_without_removal(page):
+        page.evaluate('fixture.removeWorks=false;document.addEventListener("click",e=>{if(e.target.closest("ytd-menu-service-item-renderer")?.textContent===fixture.label){const row=document.querySelector("[data-video-id=aaaaaaaaaaa]");row.replaceWith(row.cloneNode(true));}})')
+        click_confirm(page)
+        expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('Removal could not be verified')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.removed===1 && fixture.navigated===0')
+    case('row rerender alone is not mistaken for removal and never skips',rerender_without_removal)
     def keyboard(page):
         page.locator('#yt-offline-remove-host #remove').click()
         expect(page.locator('#yt-offline-remove-host #cancel')).to_be_focused()
@@ -122,6 +181,7 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         click_confirm(page)
         expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('Removal could not be verified')
         assert page.evaluate('fixture.removed===0 && fixture.wrong===0')
+        assert page.evaluate('fixture.navigated===0')
     case('generic Delete action is never clicked',generic)
     def ambiguous(page):
         page.evaluate("document.addEventListener('click',e=>{if(e.target.closest('ytd-menu-renderer button')){const menu=document.querySelector('ytd-menu-popup-renderer');menu.append(menu.lastElementChild.cloneNode(true));}})")
@@ -134,6 +194,8 @@ with sync_playwright() as p, tempfile.TemporaryDirectory(prefix='profile-',dir=o
         click_confirm(page)
         expect(page.locator('#yt-offline-remove-host #status')).to_contain_text('Removal could not be verified')
         assert page.evaluate('fixture.removed===1')
+        expect(page).to_have_url('https://www.youtube.com/watch?v=aaaaaaaaaaa')
+        assert page.evaluate('fixture.navigated===0')
     case('unverified deletion is not reported successful or retried',unverifiable)
     def missing_row(page):
         page.locator('#yt-offline-remove-host #remove').click()

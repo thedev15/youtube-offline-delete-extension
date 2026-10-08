@@ -11,7 +11,14 @@ direct deletion of browser storage.
 - Requires its visible row in a sidebar titled **Downloads** and a native menu.
 - Asks for explicit confirmation; Cancel/Escape make no removal request.
 - Opens only that row's menu and clicks an exact Downloads-specific action.
-- Reports success only after the row disappears; it never automatically retries.
+- Reports success only after the current video's ID is absent from the recognized
+  Downloads panel; a row merely being replaced/re-rendered is not enough. It never
+  automatically retries.
+- Plays the next Downloads row after verified removal, without opening Downloads.
+  No next row means no navigation; failed removal never skips a video. This can
+  be switched off in options (YouTube's own auto-advance is not disabled).
+- Explains disabled states and provides a **Details** report with element counts
+  and types, excluding video IDs/titles, URLs, cookies and account information.
 - Handles YouTube SPA navigation, stale confirmations, duplicate rows, and narrow
   viewports. Styles are isolated in a shadow root; the dialog is keyboard-accessible.
 - Defaults to English native labels. Exact translated titles/actions can be added
@@ -73,8 +80,17 @@ extension certification.
 1. Open a downloaded video's `/watch?v=…` page with the **Downloads** sidebar.
 2. Click **Remove download** beside the video actions.
 3. Confirm removal. Only the offline copy is targeted, not the creator's video.
-4. If disabled, check that the matching Downloads row has a native menu. For
-   non-English YouTube, configure the exact sidebar title/action labels in options.
+4. After verified removal, the next Downloads video plays if available. Turn off
+   the extension's auto-advance in options if you prefer to stay on the page.
+5. If disabled, select **Details** and share its privacy-safe report. Check that
+   the matching Downloads row has a native menu. For non-English YouTube,
+   configure the exact sidebar title/action labels in options.
+
+**Updating an unpacked Edge installation:** replace your existing unpacked folder
+with the current Chromium build, then open `edge://extensions`, click **Reload**
+on YouTube Offline Remove and refresh the YouTube tab. Confirm version **0.1.1**
+on the extension's details page. Updating repository files alone does not update
+an already-installed local copy.
 
 Do not add generic destructive labels or attempt to force unsupported controls.
 See [privacy](docs/PRIVACY.md) and [security](SECURITY.md).

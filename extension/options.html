@@ -8,6 +8,8 @@
   <form id="settings">
     <label for="panels">Downloads sidebar titles</label><textarea id="panels" rows="4" maxlength="1200" required></textarea>
     <label for="labels">Native removal action labels</label><textarea id="labels" rows="5" maxlength="1200" required></textarea>
+    <label><input id="advance" type="checkbox"> Play the next Downloads video after verified removal</label>
+    <p>This never skips a video when removal fails. If there is no next downloaded video, playback stays on the current page.</p>
     <p>Maximum 12 labels per field, 100 characters each. Every removal requires confirmation; this cannot be disabled.</p>
     <button type="submit">Save settings</button><button id="reset" type="button">Restore English defaults</button>
     <p id="status" role="status" aria-live="polite"></p>

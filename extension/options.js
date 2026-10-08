@@ -7,6 +7,7 @@
     const settings = sanitizeSettings(value);
     document.getElementById("panels").value = settings.panelTitles.join("\n");
     document.getElementById("labels").value = settings.removeLabels.join("\n");
+    document.getElementById("advance").checked = settings.advanceAfterRemoval;
   }
   async function save(value) {
     try {
@@ -24,7 +25,7 @@
       status.textContent = "Use a Downloads-specific action label, not a generic Delete or Remove label.";
       return;
     }
-    save({panelTitles, removeLabels});
+    save({panelTitles, removeLabels, advanceAfterRemoval: document.getElementById("advance").checked});
   });
   document.getElementById("reset").addEventListener("click", () => save(defaults));
   show(defaults);

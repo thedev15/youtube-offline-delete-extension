@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Offline Remove",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Confirm and remove the current offline video through YouTube's Downloads sidebar menu.",
   "permissions": ["storage"],
   "content_scripts": [{

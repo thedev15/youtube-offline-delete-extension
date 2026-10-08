@@ -2,6 +2,10 @@
   "use strict";
   if (document.getElementById("yt-offline-remove-host")) return;
   const {normalize, videoId, sanitizeSettings, storage, extensionApi} = globalThis.YTOfflineRemove;
+  const PANEL_SELECTOR = "ytd-playlist-panel-renderer";
+  const ROW_SELECTOR = "ytd-playlist-panel-video-renderer";
+  const HEADER_SELECTOR = "#header #title, #header-title, #playlist-title, #header .title, #header yt-formatted-string, h1, h2";
+  const MENU_BUTTON_SELECTOR = "ytd-menu-renderer button, ytd-menu-renderer yt-icon-button, yt-icon-button#menu, #menu button, button[aria-haspopup='true'], button[aria-haspopup='menu']";
   let settings = sanitizeSettings();
   let busy = false;
   let scheduled = false;
@@ -18,13 +22,14 @@
     button:hover{background:#8883}button:focus-visible{outline:3px solid #3ea6ff;outline-offset:3px}
     button:disabled{opacity:.55;cursor:default}.danger{background:#b3261e;color:#fff}.danger:hover{background:#901f18}
     .status{max-width:260px;font-size:12px;margin-inline-start:8px;overflow-wrap:anywhere}
+    #details{font-size:12px;padding:6px 10px;margin-inline-start:6px}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:40vh;overflow:auto;font:12px/1.4 monospace}
     .backdrop{position:fixed;inset:0;background:#0009;z-index:2147483647;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box}
     .dialog{background:var(--yt-spec-base-background,#fff);color:var(--yt-spec-text-primary,#111);border:1px solid #8886;border-radius:16px;padding:24px;max-width:420px;box-shadow:0 8px 40px #0007}
     h2{font-size:20px;margin:0 0 12px}p{white-space:normal;margin:10px 0 18px}.buttons{display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap}
     @media(max-width:700px){.status{max-width:160px}.dialog{padding:18px}}
     @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
     @media(forced-colors:active){button{border:1px solid ButtonText}.danger{background:ButtonFace;color:ButtonText}}
-  </style><button id="remove" type="button" aria-describedby="status">Remove download</button><span id="status" class="status" role="status" aria-live="polite"></span>`;
+  </style><button id="remove" type="button" aria-describedby="status">Remove download</button><button id="details" type="button" aria-label="Show privacy-safe removal diagnostics">Details</button><span id="status" class="status" role="status" aria-live="polite"></span>`;
   const button = shadow.getElementById("remove");
   const status = shadow.getElementById("status");
 
@@ -33,25 +38,84 @@
     const style = getComputedStyle(node);
     return style.display !== "none" && style.visibility !== "hidden" && node.getClientRects().length > 0;
   }
-  function target() {
-    const id = videoId(location.href);
-    if (!id) return null;
+  function downloadPanels() {
     const titles = settings.panelTitles.map(normalize);
+    return [...document.querySelectorAll(PANEL_SELECTOR)].filter(panel => {
+      if (!visible(panel)) return false;
+      // A row's video title must never be mistaken for the Downloads heading.
+      const headings = [...panel.querySelectorAll(HEADER_SELECTOR)].filter(node => !node.closest(ROW_SELECTOR));
+      const header = panel.querySelector("#header, #header-container");
+      const labels = headings.flatMap(node => [node.textContent, node.getAttribute("title"), node.getAttribute("aria-label")]);
+      if (header) labels.push(header.getAttribute("aria-label"));
+      return labels.some(text => text && titles.includes(normalize(text)));
+    });
+  }
+  function rowLink(row, id = null) {
+    return [...row.querySelectorAll("a[href]")].find(a => {
+      const value = videoId(a.href);
+      return value && (!id || value === id);
+    });
+  }
+  function inspection() {
+    const id = videoId(location.href);
+    if (!id) return {reason: "Not a supported watch page", found: null};
+    const panels = downloadPanels();
+    if (!panels.length) return {reason: "Downloads sidebar title/layout not recognized", found: null};
+    const rows = panels.flatMap(panel => [...panel.querySelectorAll(ROW_SELECTOR)]).filter(row => visible(row) && rowLink(row, id));
+    if (!rows.length) return {reason: "Current video not found in the Downloads sidebar", found: null};
+    if (rows.length !== 1) return {reason: "Multiple Downloads rows match the current video", found: null};
     const candidates = [];
-    for (const panel of document.querySelectorAll("ytd-playlist-panel-renderer")) {
-      if (!visible(panel)) continue;
-      const heading = panel.querySelector("#header #title, #header-title, #playlist-title, #title");
-      if (!heading || !titles.includes(normalize(heading.textContent))) continue;
-      for (const row of panel.querySelectorAll("ytd-playlist-panel-video-renderer")) {
-        if (!visible(row)) continue;
-        const link = [...row.querySelectorAll("a[href]")].find(a => videoId(a.href) === id);
-        if (!link) continue;
-        const menuButton = row.querySelector("ytd-menu-renderer button, ytd-menu-renderer yt-icon-button, button[aria-haspopup='true']");
-        if (menuButton && !menuButton.disabled) candidates.push({id, row, menuButton});
-      }
+    const row = rows[0];
+    for (const node of row.querySelectorAll(MENU_BUTTON_SELECTOR)) {
+      if (node.disabled || node.getAttribute("aria-disabled") === "true") continue;
+      // Prefer the inner native button; do not count its wrapper twice.
+      if (node.matches("yt-icon-button") && node.querySelector("button")) continue;
+      candidates.push(node);
     }
-    // Never guess among duplicate rows or touch an unrelated playlist.
-    return candidates.length === 1 ? candidates[0] : null;
+    if (candidates.length !== 1) return {reason: candidates.length ? "Multiple native menu controls found" : "YouTube exposes no native menu on this Downloads row", found: null};
+    return {reason: "Supported native Downloads row/menu found", found: {id, row, panel: row.closest(PANEL_SELECTOR), menuButton: candidates[0]}};
+  }
+  function target() {return inspection().found;}
+  function nextVideo(found) {
+    const rows = [...found.panel.querySelectorAll(ROW_SELECTOR)];
+    const index = rows.indexOf(found.row);
+    for (const row of rows.slice(index + 1)) {
+      const link = rowLink(row);
+      if (link && videoId(link.href) !== found.id) return {id: videoId(link.href), href: link.href};
+    }
+    return null;
+  }
+  function diagnosticReport() {
+    const id = videoId(location.href);
+    const panels = [...document.querySelectorAll(PANEL_SELECTOR)];
+    const rows = panels.flatMap(panel => [...panel.querySelectorAll(ROW_SELECTOR)]);
+    const currentRows = rows.filter(row => rowLink(row, id));
+    const menuTags = currentRows.flatMap(row => [...row.querySelectorAll("button, yt-icon-button, ytd-menu-renderer")]).map(node => node.localName);
+    return {extensionVersion: extensionApi?.runtime?.getManifest?.().version || "development",
+      reason: inspection().reason, watchPage: Boolean(id), panelCount: panels.length,
+      visiblePanelCount: panels.filter(visible).length, recognizedDownloadsPanelCount: downloadPanels().length,
+      rowCount: rows.length, matchingCurrentRowCount: currentRows.length,
+      matchingRowMenuElementTags: [...new Set(menuTags)], language: /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/iu.test(document.documentElement.lang) ? document.documentElement.lang : "unknown",
+      nextAfterRemoval: settings.advanceAfterRemoval};
+  }
+  function showDetails() {
+    if (modal || busy) return;
+    const overlay = document.createElement("div");
+    overlay.className = "backdrop";
+    overlay.innerHTML = `<section class="dialog" role="dialog" aria-modal="true" aria-labelledby="details-title"><h2 id="details-title">Removal details</h2><p>Copy this report into the support chat. It contains counts and element types, not video IDs, titles, URLs, cookies, or account information.</p><pre tabindex="0"></pre><button id="close-details" type="button">Close</button></section>`;
+    overlay.querySelector("pre").textContent = JSON.stringify(diagnosticReport(), null, 2);
+    shadow.append(overlay);
+    modal = {element: overlay, id: null, returnFocus: shadow.getElementById("details")};
+    const close = overlay.querySelector("button");
+    close.addEventListener("click", closeModal);
+    overlay.addEventListener("keydown", event => {
+      if (event.key === "Escape") {event.preventDefault(); event.stopPropagation(); closeModal();}
+      if (event.key === "Tab") {
+        event.preventDefault();
+        (shadow.activeElement === close ? overlay.querySelector("pre") : close).focus();
+      }
+    });
+    close.focus();
   }
   function mount() {
     const destination = document.querySelector("ytd-watch-metadata #actions") ||
@@ -71,14 +135,14 @@
     host.style.display = id ? "inline-flex" : "none";
     if (!id) return;
     mount();
-    const found = target();
+    const inspected = inspection();
+    const found = inspected.found;
     button.disabled = busy || !found;
     button.textContent = busy ? "Removing…" : "Remove download";
-    const help = found ? "Remove this video's offline copy using YouTube's menu." :
-      "Needs this video's Downloads sidebar row and its menu. Translated labels can be configured in extension options.";
+    const help = found ? "Remove this video's offline copy using YouTube's menu." : inspected.reason + ". Select Details for diagnostics.";
     button.title = help;
     button.setAttribute("aria-label", found ? "Remove current video from YouTube Downloads" : "Remove download unavailable: " + help);
-    const text = notice || (found ? "" : "Downloads removal unavailable here");
+    const text = notice || (found ? "" : inspected.reason);
     if (status.textContent !== text) status.textContent = text;
   }
   function schedule() {
@@ -91,7 +155,8 @@
     const previous = modal;
     modal = null;
     previous.element.remove();
-    if (button.isConnected && !button.disabled) button.focus();
+    const focus = previous.returnFocus || button;
+    if (focus.isConnected && !focus.disabled) focus.focus();
   }
   function askConfirmation(found) {
     if (modal || busy) return;
@@ -103,6 +168,7 @@
       <div class="buttons"><button id="cancel" type="button">Cancel</button><button id="confirm" class="danger" type="button">Remove download</button></div>
     </section>`;
     shadow.append(overlay);
+    if (settings.advanceAfterRemoval) overlay.querySelector("#confirm-help").append(" After verified removal, play the next Downloads video if one is available.");
     modal = {element: overlay, id: found.id};
     const cancel = overlay.querySelector("#cancel");
     const confirm = overlay.querySelector("#confirm");
@@ -155,6 +221,7 @@
     notice = "";
     update();
     const expectedId = found.id;
+    const next = nextVideo(found);
     try {
       if ([...document.querySelectorAll(menuSelector)].some(visible)) throw new Error("Close the open YouTube menu and try again.");
       found.menuButton.click();
@@ -162,8 +229,8 @@
         if (videoId(location.href) !== expectedId || !found.row.isConnected) throw new Error("The video changed. Nothing was removed.");
         const labels = settings.removeLabels.map(normalize);
         const matches = [...document.querySelectorAll(menuSelector)].filter(visible)
-          .flatMap(menu => [...menu.querySelectorAll("ytd-menu-service-item-renderer")])
-          .filter(node => visible(node) && labels.includes(normalize(node.textContent)));
+          .flatMap(menu => [...menu.querySelectorAll("ytd-menu-service-item-renderer, yt-list-item-view-model")])
+          .filter(node => visible(node) && labels.includes(normalize((node.querySelector("yt-formatted-string, .yt-list-item-view-model__title") || node).textContent)));
         if (matches.length > 1) throw new Error("Ambiguous removal controls. Nothing was removed.");
         return matches[0];
       });
@@ -172,10 +239,19 @@
       if (!current || current.id !== expectedId || current.row !== found.row) throw new Error("The Downloads row changed. Nothing was removed.");
       item.click();
       await waitFor(() => {
-        if (videoId(location.href) !== expectedId) throw new Error("Video changed after removal request; removal could not be verified.");
-        return !found.row.isConnected;
+        const playing = videoId(location.href);
+        if (playing !== expectedId && playing !== next?.id) throw new Error("Video changed after removal request; removal could not be verified.");
+        const panels = downloadPanels();
+        if (panels.length !== 1) return false;
+        return ![...panels[0].querySelectorAll(ROW_SELECTOR)].some(row => rowLink(row, expectedId));
       }, 5000);
       notice = "Removed from Downloads.";
+      if (settings.advanceAfterRemoval && next && videoId(location.href) === expectedId) {
+        const panels = downloadPanels();
+        const links = panels.flatMap(panel => [...panel.querySelectorAll(ROW_SELECTOR)].map(row => rowLink(row, next.id))).filter(Boolean);
+        if (links.length === 1 && videoId(links[0].href) === next.id) links[0].click();
+        else notice = "Removed from Downloads; next video is no longer available.";
+      }
     } catch (error) {
       notice = error.message === "YouTube did not expose or confirm a supported removal control." ?
         "Removal could not be verified. Check YouTube's native menu; no retries were made." : error.message;
@@ -185,16 +261,22 @@
     }
   }
   button.addEventListener("click", () => {const found = target(); if (found) askConfirmation(found);});
+  shadow.getElementById("details").addEventListener("click", showDetails);
   const observer = new MutationObserver(schedule);
   observer.observe(document.documentElement, {subtree: true, childList: true});
   document.addEventListener("yt-navigate-finish", schedule);
   window.addEventListener("popstate", schedule);
-  let routeTimer = setInterval(() => {if (route !== location.href) schedule();}, 750);
+  let lastReason = "";
+  const periodic = () => {
+    const reason = inspection().reason;
+    if (route !== location.href || reason !== lastReason) {lastReason = reason; schedule();}
+  };
+  let routeTimer = setInterval(periodic, 750);
   window.addEventListener("pagehide", () => {observer.disconnect(); clearInterval(routeTimer); closeModal();});
   window.addEventListener("pageshow", event => {
     if (event.persisted) {
       observer.observe(document.documentElement, {subtree: true, childList: true});
-      routeTimer = setInterval(() => {if (route !== location.href) schedule();}, 750);
+      routeTimer = setInterval(periodic, 750);
       schedule();
     }
   });

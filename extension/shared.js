@@ -4,6 +4,7 @@
   const defaults = Object.freeze({
     panelTitles: ["Downloads"],
     removeLabels: ["Remove from downloads", "Delete from downloads", "Remove download", "Delete download"],
+    advanceAfterRemoval: true,
   });
   function normalize(text) {
     return String(text || "").normalize("NFKC").replace(/\s+/gu, " ").trim().toLocaleLowerCase();
@@ -19,6 +20,10 @@
   function sanitizeSettings(value) {
     const result = {};
     for (const key of Object.keys(defaults)) {
+      if (key === "advanceAfterRemoval") {
+        result[key] = typeof value?.[key] === "boolean" ? value[key] : defaults[key];
+        continue;
+      }
       const input = value && value[key];
       const lines = Array.isArray(input) ? input : defaults[key];
       result[key] = [...new Set(lines.filter(v => typeof v === "string")

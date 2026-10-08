@@ -7,16 +7,18 @@
 <ytd-playlist-panel-video-renderer data-video-id="bbbbbbbbbbb"><a href="/watch?v=bbbbbbbbbbb">Other video</a><ytd-menu-renderer><button aria-haspopup="true" aria-label="Video options">⋮</button></ytd-menu-renderer></ytd-playlist-panel-video-renderer>
 </ytd-playlist-panel-renderer></ytd-watch-flexy><div id="popups"></div>
 <script>
-window.fixture={opened:0,removed:0,wrong:0,removeWorks:true,label:"Remove from downloads"};
+window.fixture={opened:0,removed:0,wrong:0,navigated:0,removeWorks:true,autoAdvance:false,menuTag:"ytd-menu-service-item-renderer",label:"Remove from downloads"};
 document.addEventListener("click",event=>{
+  const link=event.target.closest("ytd-playlist-panel-video-renderer a[href]");
+  if(link){event.preventDefault();window.fixture.navigated++;history.pushState({},"",link.href);document.dispatchEvent(new Event("yt-navigate-finish"));return;}
   const menuButton=event.target.closest("ytd-menu-renderer button");
   if(!menuButton)return;
   window.fixture.opened++;
   const row=menuButton.closest("ytd-playlist-panel-video-renderer");
   const menu=document.createElement("ytd-menu-popup-renderer");
   const generic=document.createElement("ytd-menu-service-item-renderer");generic.textContent="Delete";generic.addEventListener("click",()=>window.fixture.wrong++);
-  const remove=document.createElement("ytd-menu-service-item-renderer");remove.textContent=window.fixture.label;
-  remove.addEventListener("click",()=>{window.fixture.removed++;if(window.fixture.removeWorks){row.remove();menu.remove();}});
+  const remove=document.createElement(window.fixture.menuTag);remove.textContent=window.fixture.label;remove.style.display="block";
+  remove.addEventListener("click",()=>{window.fixture.removed++;if(window.fixture.removeWorks){const next=row.nextElementSibling?.querySelector("a[href]");row.remove();menu.remove();if(window.fixture.autoAdvance&&next){history.pushState({},"",next.href);document.dispatchEvent(new Event("yt-navigate-finish"));}}});
   menu.append(generic,remove);document.getElementById("popups").append(menu);
 });
 </script></body></html>
